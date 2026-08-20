@@ -1,0 +1,3105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scholar Reference Verifier - Verify Citations & Detect Discrepancies</title>
+  <meta name="description" content="Free academic citation verifier. Detects publication errors, hallucinated references, and retractions using Crossref and OpenAlex. Formats bibliographies in APA, MLA, Chicago, IEEE, BibTeX and Word.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+/* Scholar Reference Verifier - Standalone Web Application Stylesheet */
+:root {
+  --bg-app: #090d16;
+  --bg-nav: rgba(15, 23, 42, 0.85);
+  --bg-card: #131b2e;
+  --bg-input: #0b1120;
+  --bg-surface-hover: #1e293b;
+  
+  --border-color: rgba(255, 255, 255, 0.09);
+  --border-focus: #38bdf8;
+  
+  --text-main: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --accent-primary: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  
+  --success: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  
+  --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-color);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+body.light-theme {
+  --bg-app: #f1f5f9;
+  --bg-nav: rgba(255, 255, 255, 0.85);
+  --bg-card: #ffffff;
+  --bg-input: #f8fafc;
+  --bg-surface-hover: #f1f5f9;
+  
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-focus: #2563eb;
+  
+  --text-main: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  
+  --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--border-color);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Navbar */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: var(--bg-nav);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--accent-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+}
+
+.brand-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-main);
+}
+
+.badge-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--success-bg);
+  color: var(--success);
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.brand-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.style-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.select-dropdown {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.select-dropdown:hover, .select-dropdown:focus {
+  border-color: var(--border-focus);
+}
+
+.icon-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.icon-btn:hover {
+  color: var(--text-main);
+  border-color: var(--border-focus);
+}
+
+.icon-btn.danger-btn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Hero Header */
+.hero-section {
+  padding: 36px 24px 20px;
+  text-align: center;
+}
+
+.hero-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hero-badge {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-primary);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+.hero-section h1 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.25;
+  margin-bottom: 12px;
+  color: var(--text-main);
+}
+
+.hero-section p {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Main Workspace */
+.workspace-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 24px 40px;
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 24px;
+  flex: 1;
+}
+
+@media (max-width: 960px) {
+  .workspace-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workspace-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Card Header */
+.card-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-heading h2 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.count-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.text-action-btn {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.text-action-btn:hover {
+  text-decoration: underline;
+}
+
+.divider {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* Textarea & Dropzone */
+.textarea-dropzone {
+  background: var(--bg-input);
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s, background 0.2s;
+  flex: 1;
+}
+
+.textarea-dropzone.drag-active {
+  border-color: var(--border-focus);
+  background: rgba(56, 189, 248, 0.05);
+}
+
+textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  color: var(--text-main);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  flex: 1;
+}
+
+textarea::placeholder {
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+}
+
+.dropzone-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-secondary-sm {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-secondary-sm:hover {
+  color: var(--text-main);
+  border-color: var(--border-focus);
+}
+
+.keyboard-tip {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.keyboard-tip code {
+  background: var(--bg-card);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.action-btn-row {
+  margin-top: 18px;
+}
+
+.btn-primary-lg {
+  width: 100%;
+  background: var(--accent-gradient);
+  border: none;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-primary-lg:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(59, 130, 246, 0.5);
+}
+
+.btn-primary-lg:active {
+  transform: translateY(0);
+}
+
+/* Progress Box */
+.progress-box {
+  margin-top: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+
+.progress-bar-track {
+  height: 8px;
+  background: var(--bg-card);
+  border-radius: 20px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  transition: width 0.25s ease-out;
+}
+
+.progress-status-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 14px;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  font-size: 13.5px;
+  max-width: 400px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.feature-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.feature-pills span {
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  padding: 4px 10px;
+  border-radius: 20px;
+  color: var(--text-secondary);
+}
+
+/* Results Dashboard */
+.results-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+/* Integrity Banner */
+.integrity-banner {
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.integrity-banner.status-good {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+.integrity-banner.status-warn {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.integrity-banner.status-danger {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.integrity-icon {
+  font-size: 24px;
+}
+
+.integrity-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.integrity-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.stat-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.stat-text {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.stat-card.verified .stat-num { color: var(--success); }
+.stat-card.discrepancy .stat-num { color: var(--warning); }
+.stat-card.not-found .stat-num { color: var(--danger); }
+
+/* Results Toolbar */
+.results-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tab-btn {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+}
+
+.tab-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+/* Cards Container */
+.cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.cards-container::-webkit-scrollbar {
+  width: 6px;
+}
+.cards-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 6px;
+}
+
+.ref-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  transition: border-color 0.15s;
+}
+
+.ref-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ref-card.status-verified {
+  border-left: 4px solid var(--success);
+}
+.ref-card.status-discrepancy {
+  border-left: 4px solid var(--warning);
+}
+.ref-card.status-not_found {
+  border-left: 4px solid var(--danger);
+}
+
+.card-header-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-badge.verified {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.status-badge.discrepancy {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.status-badge.not_found {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.confidence-rate {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.card-raw-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.card-verified-box {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.verified-box-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.verified-box-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+}
+
+.intext-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.intext-preview strong {
+  color: var(--text-main);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.verified-citation-text {
+  font-size: 12.5px;
+  color: var(--text-main);
+  line-height: 1.5;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.discrepancy-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.disc-pill {
+  font-size: 11px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.disc-pill.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.card-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+.mini-action-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.mini-action-btn:hover {
+  color: var(--text-main);
+  border-color: var(--border-focus);
+}
+
+.mini-action-btn.primary-action {
+  color: var(--accent-primary);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.mini-action-btn.oa-action {
+  color: var(--success);
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.mini-action-btn.oa-action:hover {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: var(--success);
+}
+
+.cite-count-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-primary);
+}
+
+/* Export Tray */
+.export-tray {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.tray-btn {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tray-btn:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-focus);
+}
+
+.tray-btn.primary-tray-btn {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: var(--accent-primary);
+}
+
+.tray-btn.primary-tray-btn:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: var(--accent-primary);
+}
+
+.export-dropdown-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.dropdown-popover {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  min-width: 280px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdown-popover button {
+  background: none;
+  border: none;
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dropdown-popover button:hover {
+  background: var(--bg-input);
+  color: var(--accent-primary);
+}
+
+/* Site Footer */
+.site-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-nav);
+  padding: 24px;
+  text-align: center;
+}
+
+.footer-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.credit-line {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.credit-line a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.credit-line a:hover {
+  text-decoration: underline;
+}
+
+.disclaimer-line {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.disclaimer-line a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 20px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  animation: fadeInOut 2s ease forwards;
+  z-index: 300;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, 12px); }
+  15% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -12px); }
+}
+
+</style>
+</head>
+<body class="dark-theme">
+  <!-- Top Navigation / Navbar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            <path d="m9 10 2 2 4-4"></path>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title-row">
+            <span class="brand-name">Scholar Verifier</span>
+            <span class="badge-tag">Academic Web Edition</span>
+          </div>
+          <span class="brand-sub">Crossref • OpenAlex • Semantic Scholar</span>
+        </div>
+      </div>
+
+      <div class="nav-controls">
+        <div class="style-selector-wrap">
+          <label for="citation-style-select">Format:</label>
+          <select id="citation-style-select" class="select-dropdown">
+            <option value="apa">APA 7th Edition</option>
+            <option value="mla">MLA 9th Edition</option>
+            <option value="chicago">Chicago (Author-Date)</option>
+            <option value="ieee">IEEE Style</option>
+            <option value="bibtex">BibTeX Entry</option>
+          </select>
+        </div>
+
+        <button id="theme-toggle" class="icon-btn" title="Toggle Dark/Light Theme">
+          <svg class="sun-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </button>
+
+        <button id="reset-all-btn" class="icon-btn danger-btn" title="Reset Search & Clear Workspace">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Header Banner -->
+  <header class="hero-section">
+    <div class="hero-container">
+      <div class="hero-badge">⚡ 100% Free & Open Academic Citation Verification</div>
+      <h1>Verify Scholarly References & Fix Citation Errors</h1>
+      <p>Instantly cross-check your manuscript bibliography against 250M+ verified works on Crossref and OpenAlex. Detect year typos, retracted papers, and hallucinated references with zero CAPTCHAs.</p>
+    </div>
+  </header>
+
+  <!-- Main Workspace Container -->
+  <main class="workspace-container">
+    <!-- Left Column: Input Section -->
+    <section class="workspace-card input-card">
+      <div class="card-header-bar">
+        <div class="card-heading">
+          <h2>Bibliography Input</h2>
+          <span id="ref-count-hint" class="count-badge">0 references detected</span>
+        </div>
+        <div class="card-header-actions">
+          <button id="load-sample-btn" class="text-action-btn">Load Sample References</button>
+          <span class="divider">•</span>
+          <button id="clear-input-btn" class="text-action-btn">Clear</button>
+        </div>
+      </div>
+
+      <div class="textarea-dropzone" id="textarea-dropzone">
+        <textarea 
+          id="reference-input" 
+          placeholder="Paste your references here (e.g. numbered [1], APA format, or line-by-line)...&#10;&#10;You can also drag & drop a .txt, .bib, or .md file directly here!"
+          rows="14"
+        ></textarea>
+        <div class="dropzone-footer">
+          <div class="file-upload-wrapper">
+            <input type="file" id="file-upload-input" accept=".txt,.bib,.csv,.md" style="display: none;">
+            <button id="upload-file-btn" class="btn-secondary-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              Upload .txt / .bib
+            </button>
+          </div>
+          <span class="keyboard-tip">Tip: Numbered lists like <code>[1]</code> or <code>1.</code> are automatically parsed</span>
+        </div>
+      </div>
+
+      <div class="action-btn-row">
+        <button id="verify-btn" class="btn-primary-lg">
+          <svg class="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Verify References & Fix Errors
+        </button>
+      </div>
+
+      <!-- Verification Progress Bar -->
+      <div class="progress-box" id="progress-box" style="display: none;">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%;"></div>
+        </div>
+        <div class="progress-status-row">
+          <span id="progress-label">Querying academic registries...</span>
+          <span id="progress-percent">0%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Results Dashboard -->
+    <section class="workspace-card results-card" id="results-card">
+      <!-- Welcome Empty State -->
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">📚</div>
+        <h3>Ready to Audit Your Bibliography</h3>
+        <p>Paste references on the left or click <strong>Load Sample References</strong> to run an instant verification audit.</p>
+        <div class="feature-pills">
+          <span>✓ Retraction Alerts</span>
+          <span>✓ Duplicate Detection</span>
+          <span>✓ Word .doc Export</span>
+          <span>✓ Free Open Access PDFs</span>
+        </div>
+      </div>
+
+      <!-- Live Results View -->
+      <div class="results-dashboard" id="results-dashboard" style="display: none;">
+        <!-- Integrity Audit Banner -->
+        <div class="integrity-banner status-good" id="integrity-banner">
+          <div class="integrity-icon" id="integrity-icon">🛡️</div>
+          <div class="integrity-body">
+            <div class="integrity-title" id="integrity-title">Bibliography Integrity: 100% Authentic</div>
+            <div class="integrity-sub" id="integrity-sub">All citations verified against authoritative academic registries.</div>
+          </div>
+        </div>
+
+        <!-- Quick Summary Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card" id="stat-total">
+            <div class="stat-num" id="val-total">0</div>
+            <div class="stat-text">Total References</div>
+          </div>
+          <div class="stat-card verified" id="stat-verified">
+            <div class="stat-num" id="val-verified">0</div>
+            <div class="stat-text">Verified</div>
+          </div>
+          <div class="stat-card discrepancy" id="stat-discrepancy">
+            <div class="stat-num" id="val-discrepancy">0</div>
+            <div class="stat-text">Discrepancies Fixed</div>
+          </div>
+          <div class="stat-card not-found" id="stat-not-found">
+            <div class="stat-num" id="val-not-found">0</div>
+            <div class="stat-text">Unverified / Fake</div>
+          </div>
+        </div>
+
+        <!-- Toolbar & Filter Tabs -->
+        <div class="results-toolbar">
+          <div class="filter-tabs">
+            <button class="tab-btn active" data-filter="all">All (<span id="count-all">0</span>)</button>
+            <button class="tab-btn" data-filter="verified">Verified (<span id="count-verified">0</span>)</button>
+            <button class="tab-btn" data-filter="discrepancy">Discrepancies (<span id="count-discrepancy">0</span>)</button>
+            <button class="tab-btn" data-filter="not_found">Unverified (<span id="count-not-found">0</span>)</button>
+          </div>
+
+          <div class="toolbar-actions">
+            <button id="sort-az-btn" class="btn-secondary-sm" title="Sort references alphabetically by author surname">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
+              Sort A–Z
+            </button>
+          </div>
+        </div>
+
+        <!-- Reference Cards List Container -->
+        <div class="cards-container" id="cards-container"></div>
+
+        <!-- Export & Action Tray -->
+        <div class="export-tray">
+          <button id="copy-all-btn" class="tray-btn primary-tray-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            Copy All
+          </button>
+          <button id="apply-input-btn" class="tray-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Apply to Input
+          </button>
+
+          <div class="export-dropdown-wrapper">
+            <button id="export-dropdown-btn" class="tray-btn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Export Format
+            </button>
+            <div class="dropdown-popover" id="export-popover" style="display: none;">
+              <button data-format="word">📄 Microsoft Word (.doc with Hanging Indents)</button>
+              <button data-format="bib">📦 BibTeX Bibliography (.bib)</button>
+              <button data-format="txt">📝 Text Discrepancy Report (.txt)</button>
+              <button data-format="csv">📊 Spreadsheet Table (.csv)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Global Footer -->
+  <footer class="site-footer">
+    <div class="footer-content">
+      <p class="credit-line">
+        Developed under the academic guidance of 
+        <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Prof. Babu George</a>
+      </p>
+      <p class="disclaimer-line">
+        Powered by open bibliographic metadata from <a href="https://www.crossref.org/" target="_blank" rel="noopener noreferrer">Crossref</a>, <a href="https://openalex.org/" target="_blank" rel="noopener noreferrer">OpenAlex</a>, and <a href="https://www.semanticscholar.org/" target="_blank" rel="noopener noreferrer">Semantic Scholar</a>. Client-side processing • Zero data retention.
+      </p>
+    </div>
+  </footer>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast" style="display: none;">Copied to clipboard!</div>
+
+  <!-- Inlined Standalone Scripts -->
+<script>
+
+/* --- citation-parser.js --- */
+/**
+ * Citation Parser Service
+ * Extracts DOI, arXiv ID, publication year, authors, title, and venue from raw citation strings.
+ */
+
+class CitationParser {
+  static splitReferences(rawText) {
+    if (!rawText || !rawText.trim()) return [];
+
+    const normalized = rawText.replace(/\r\n/g, '\n').trim();
+    
+    // Check if input is formatted with numbered bullet points (e.g., [1], 1., 1) )
+    const numberedPattern = /(?:^|\n)(?:\[\d+\]|\d+[\.\)]|\(\d+\))\s+/;
+    if (numberedPattern.test(normalized)) {
+      const items = normalized
+        .split(/(?:^|\n)(?=(?:\[\d+\]|\d+[\.\)]|\(\d+\))\s+)/)
+        .map(item => item.replace(/^(?:\[\d+\]|\d+[\.\)]|\(\d+\))\s*/, '').trim())
+        .filter(item => item.length > 5);
+      if (items.length > 0) return items;
+    }
+
+    // Check if separated by double linebreaks
+    const doubleLineSplit = normalized.split(/\n\s*\n/).map(s => s.trim()).filter(s => s.length > 5);
+    if (doubleLineSplit.length > 1) {
+      return doubleLineSplit;
+    }
+
+    // Split by single linebreaks
+    const lineSplit = normalized.split(/\n/).map(s => s.trim()).filter(s => s.length > 10);
+    return lineSplit.length > 0 ? lineSplit : [normalized];
+  }
+
+  static parse(rawCitation) {
+    const text = rawCitation.trim();
+    const result = {
+      raw: text,
+      doi: null,
+      arxivId: null,
+      year: null,
+      authors: [],
+      authorString: '',
+      title: '',
+      venue: '',
+      cleanQuery: ''
+    };
+
+    // 1. Extract DOI
+    const doiMatch = text.match(/(?:https?:\/\/doi\.org\/|doi:\s*|doi\.org\/)?(10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)/i);
+    if (doiMatch) {
+      result.doi = doiMatch[1].replace(/[\.,;\)]+$/, '');
+    }
+
+    // 2. Extract arXiv ID
+    const arxivMatch = text.match(/(?:arXiv:\s*|arxiv\.org\/(?:abs|pdf)\/)(\d{4}\.\d{4,5}(?:v\d+)?|[a-z\-]+(?:\.[A-Z]{2})?\/\d{7})/i);
+    if (arxivMatch) {
+      result.arxivId = arxivMatch[1];
+    }
+
+    // 3. Extract Year (4-digit year between 1800 and 2099)
+    const yearMatch = text.match(/(?:\(|\b)(19\d\d|20\d\d)(?:\)|\b)/);
+    if (yearMatch) {
+      result.year = parseInt(yearMatch[1], 10);
+    }
+
+    // 4. Extract components (Title, Authors, Venue)
+    this._extractComponents(text, result);
+
+    // 5. Build clean search query for APIs
+    result.cleanQuery = this._buildSearchQuery(result);
+
+    return result;
+  }
+
+  static _extractComponents(text, result) {
+    let clean = text
+      .replace(/https?:\/\/[^\s]+/g, '') // remove urls
+      .replace(/doi:\s*10\.\d+\/[^\s]+/i, '') // remove explicit doi
+      .replace(/^\[?\d+[\].\)]\s*/, '') // remove starting numbering
+      .replace(/\.{3,}/g, ' ') // replace ellipsis ... with space
+      .trim();
+
+    // Check if title is enclosed in quotes
+    const quoteMatch = clean.match(/["“]([^"”]{5,})["”]/);
+    if (quoteMatch) {
+      result.title = quoteMatch[1].trim();
+      const parts = clean.split(quoteMatch[0]);
+      if (parts[0]) {
+        result.authorString = parts[0].replace(/\(\d{4}\)|\d{4}/g, '').replace(/[,.;]+$/, '').trim();
+      }
+      if (parts[1]) {
+        result.venue = parts[1].replace(/^[,\s.]+/, '').trim();
+      }
+    } else {
+      // Pattern 1: Author (Year). Title. Venue.
+      const standardYearPattern = /^(.*?)\s*\((19\d\d|20\d\d)\)\s*[\.\:\,]\s*(.*?)(?:\.|$)(.*)/;
+      const match = clean.match(standardYearPattern);
+
+      if (match) {
+        result.authorString = match[1].trim();
+        if (!result.year) {
+          result.year = parseInt(match[2], 10);
+        }
+        result.title = match[3].trim();
+        result.venue = match[4] ? match[4].replace(/^[.,\s]+/, '').trim() : '';
+      } else {
+        // Fallback: Split by period followed by space
+        const segments = clean.split(/\.\s+/).filter(s => s.trim().length > 0);
+        if (segments.length >= 3) {
+          result.authorString = segments[0].replace(/\(\d{4}\)/g, '').trim();
+          result.title = segments[1].trim();
+          result.venue = segments.slice(2).join('. ').trim();
+        } else if (segments.length === 2) {
+          result.authorString = segments[0].replace(/\(\d{4}\)/g, '').trim();
+          result.title = segments[1].trim();
+        } else {
+          result.title = clean;
+        }
+      }
+    }
+
+    // Clean title from stray quotes or punctuation
+    result.title = result.title.replace(/^["'“]+|["'”]+$/g, '').trim();
+
+    // Parse authors from authorString
+    if (result.authorString) {
+      result.authors = this._parseAuthors(result.authorString);
+    }
+  }
+
+  static _parseAuthors(authorStr) {
+    const cleaned = authorStr
+      .replace(/\bet al\.?/gi, '')
+      .replace(/&/g, ',')
+      .replace(/\band\b/gi, ',');
+
+    return cleaned
+      .split(/[,;]/)
+      .map(a => a.trim())
+      .filter(a => a.length > 1 && !/^\d+$/.test(a));
+  }
+
+  static _buildSearchQuery(parsed) {
+    const parts = [];
+    if (parsed.title && parsed.title.length > 5) {
+      const cleanedTitle = parsed.title.replace(/[^\w\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+      parts.push(cleanedTitle);
+    } else {
+      parts.push(parsed.raw.replace(/https?:\/\/[^\s]+/g, '').substring(0, 150));
+    }
+
+    if (parsed.authors && parsed.authors.length > 0) {
+      const firstAuthor = parsed.authors[0].replace(/[^a-zA-Z]/g, '');
+      if (firstAuthor.length > 2) {
+        parts.push(firstAuthor);
+      }
+    }
+
+    return parts.join(' ').trim();
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = CitationParser;
+}
+if (typeof window !== 'undefined') {
+  window.CitationParser = CitationParser;
+}
+
+
+/* --- crossref-service.js --- */
+/**
+ * Crossref Service
+ * Queries the official Crossref REST API using the polite pool.
+ * Does not trigger any CAPTCHAs, fully compliant with academic rate limits.
+ */
+
+class CrossrefService {
+  static BASE_URL = 'https://api.crossref.org/works';
+  static POLITE_EMAIL = 'verifier-extension@academic-tools.org';
+
+  /**
+   * Look up a work directly by DOI.
+   */
+  static async getByDoi(doi) {
+    try {
+      const cleanDoi = encodeURIComponent(doi.trim());
+      const url = `${this.BASE_URL}/${cleanDoi}?mailto=${this.POLITE_EMAIL}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error(`Crossref status: ${res.status}`);
+      }
+      const data = await res.json();
+      return this._normalizeWork(data.message);
+    } catch (err) {
+      console.warn('[CrossrefService] DOI lookup failed:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Search Crossref using parsed citation fields or query string.
+   */
+  static async search(parsed) {
+    try {
+      const params = new URLSearchParams();
+      params.append('mailto', this.POLITE_EMAIL);
+      params.append('rows', '3');
+
+      if (parsed.title && parsed.title.length > 5) {
+        params.append('query.bibliographic', parsed.title);
+      } else if (parsed.cleanQuery) {
+        params.append('query.bibliographic', parsed.cleanQuery);
+      } else {
+        params.append('query.bibliographic', parsed.raw);
+      }
+
+      if (parsed.authors && parsed.authors.length > 0) {
+        const firstAuthor = parsed.authors[0].split(/\s+/).pop();
+        if (firstAuthor) {
+          params.append('query.author', firstAuthor);
+        }
+      }
+
+      const url = `${this.BASE_URL}?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        return [];
+      }
+      const data = await res.json();
+      const items = data.message?.items || [];
+      return items.map(item => this._normalizeWork(item));
+    } catch (err) {
+      console.warn('[CrossrefService] Search failed:', err);
+      return [];
+    }
+  }
+
+  static _normalizeWork(item) {
+    if (!item) return null;
+
+    // Authors extraction
+    const authors = (item.author || []).map(a => {
+      const family = a.family || '';
+      const given = a.given || '';
+      const name = a.name || (given ? `${family}, ${given}` : family);
+      return {
+        family,
+        given,
+        name: name.trim() || 'Unknown'
+      };
+    });
+
+    // Year extraction
+    let year = null;
+    if (item.published?.['date-parts']?.[0]?.[0]) {
+      year = item.published['date-parts'][0][0];
+    } else if (item['published-print']?.['date-parts']?.[0]?.[0]) {
+      year = item['published-print']['date-parts'][0][0];
+    } else if (item['published-online']?.['date-parts']?.[0]?.[0]) {
+      year = item['published-online']['date-parts'][0][0];
+    } else if (item.created?.['date-parts']?.[0]?.[0]) {
+      year = item.created['date-parts'][0][0];
+    }
+
+    const title = Array.isArray(item.title) ? item.title[0] : (item.title || '');
+    const containerTitle = Array.isArray(item['container-title'])
+      ? item['container-title'][0]
+      : (item['container-title'] || '');
+
+    const isRetracted = Boolean(
+      item['update-to']?.some(u => u.type?.toLowerCase().includes('retraction')) ||
+      item.relation?.['is-retracted-by']
+    );
+
+    return {
+      source: 'Crossref',
+      doi: item.DOI || null,
+      title: title.trim(),
+      authors,
+      authorString: authors.map(a => a.name).join(', '),
+      year: year ? parseInt(year, 10) : null,
+      journal: containerTitle.trim(),
+      volume: item.volume || '',
+      issue: item.issue || '',
+      page: item.page || '',
+      publisher: item.publisher || '',
+      type: item.type || 'journal-article',
+      url: item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : null),
+      isRetracted,
+      isOfficialDoi: true,
+      rawItem: item
+    };
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = CrossrefService;
+}
+if (typeof window !== 'undefined') {
+  window.CrossrefService = CrossrefService;
+}
+
+
+/* --- openalex-service.js --- */
+/**
+ * OpenAlex Service
+ * Fast, open academic dataset of 250M+ research papers.
+ * Completely open API, no keys required, high rate limits.
+ */
+
+class OpenAlexService {
+  static BASE_URL = 'https://api.openalex.org/works';
+  static POLITE_EMAIL = 'verifier-extension@academic-tools.org';
+
+  /**
+   * Search OpenAlex by DOI
+   */
+  static async getByDoi(doi) {
+    try {
+      const cleanDoi = doi.trim();
+      const url = `${this.BASE_URL}/https://doi.org/${cleanDoi}?mailto=${this.POLITE_EMAIL}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return this._normalizeWork(data);
+    } catch (err) {
+      console.warn('[OpenAlexService] DOI lookup failed:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Search OpenAlex by title or clean query
+   */
+  static async search(parsed) {
+    try {
+      const query = parsed.title && parsed.title.length > 5 ? parsed.title : (parsed.cleanQuery || parsed.raw);
+      const params = new URLSearchParams();
+      params.append('search', query);
+      params.append('per-page', '3');
+      params.append('mailto', this.POLITE_EMAIL);
+
+      const url = `${this.BASE_URL}?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+
+      const data = await res.json();
+      const results = data.results || [];
+      return results.map(item => this._normalizeWork(item));
+    } catch (err) {
+      console.warn('[OpenAlexService] Search failed:', err);
+      return [];
+    }
+  }
+
+  static _normalizeWork(item) {
+    if (!item) return null;
+
+    const authors = (item.authorships || []).map(a => {
+      const name = a.author?.display_name || 'Unknown';
+      const parts = name.split(' ');
+      const family = parts.length > 1 ? parts[parts.length - 1] : name;
+      const given = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
+      return { family, given, name };
+    });
+
+    const doi = item.doi ? item.doi.replace(/^https?:\/\/doi\.org\//, '') : null;
+    const location = item.primary_location || {};
+    const source = location.source || {};
+
+    return {
+      source: 'OpenAlex',
+      doi,
+      title: item.title ? item.title.trim() : (item.display_name || ''),
+      authors,
+      authorString: authors.map(a => a.name).join(', '),
+      year: item.publication_year || null,
+      journal: source.display_name || '',
+      volume: item.biblio?.volume || '',
+      issue: item.biblio?.issue || '',
+      page: item.biblio?.first_page ? `${item.biblio.first_page}-${item.biblio.last_page || ''}` : '',
+      publisher: source.host_organization_name || '',
+      type: item.type || 'article',
+      url: item.doi || location.landing_page_url || (doi ? `https://doi.org/${doi}` : null),
+      citationCount: item.cited_by_count || 0,
+      openAccess: item.open_access?.is_oa || false,
+      oaUrl: item.open_access?.oa_url || item.primary_location?.pdf_url || null,
+      isRetracted: !!item.is_retracted,
+      isOfficialDoi: !!doi,
+      rawItem: item
+    };
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = OpenAlexService;
+}
+if (typeof window !== 'undefined') {
+  window.OpenAlexService = OpenAlexService;
+}
+
+
+/* --- semantic-scholar.js --- */
+/**
+ * Semantic Scholar Service
+ * Fallback engine for computer science, AI, biomedical, and preprint verification.
+ */
+
+class SemanticScholarService {
+  static BASE_URL = 'https://api.semanticscholar.org/graph/v1/paper';
+
+  static async getByDoi(doi) {
+    try {
+      const url = `${this.BASE_URL}/DOI:${encodeURIComponent(doi)}?fields=title,authors,year,venue,publicationVenue,externalIds,url,citationCount`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return this._normalizeWork(data);
+    } catch (err) {
+      console.warn('[SemanticScholarService] DOI lookup failed:', err);
+      return null;
+    }
+  }
+
+  static async search(parsed) {
+    try {
+      const query = parsed.title && parsed.title.length > 5 ? parsed.title : (parsed.cleanQuery || parsed.raw);
+      const params = new URLSearchParams();
+      params.append('query', query);
+      params.append('limit', '3');
+      params.append('fields', 'title,authors,year,venue,publicationVenue,externalIds,url,citationCount');
+
+      const url = `${this.BASE_URL}/search?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+
+      const data = await res.json();
+      const items = data.data || [];
+      return items.map(item => this._normalizeWork(item));
+    } catch (err) {
+      console.warn('[SemanticScholarService] Search failed:', err);
+      return [];
+    }
+  }
+
+  static _normalizeWork(item) {
+    if (!item) return null;
+
+    const authors = (item.authors || []).map(a => {
+      const name = a.name || 'Unknown';
+      const parts = name.split(' ');
+      const family = parts.length > 1 ? parts[parts.length - 1] : name;
+      const given = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
+      return { family, given, name };
+    });
+
+    const doi = item.externalIds?.DOI || null;
+    const venue = item.publicationVenue?.name || item.venue || '';
+
+    return {
+      source: 'Semantic Scholar',
+      doi,
+      title: item.title ? item.title.trim() : '',
+      authors,
+      authorString: authors.map(a => a.name).join(', '),
+      year: item.year || null,
+      journal: venue,
+      volume: '',
+      issue: '',
+      page: '',
+      publisher: '',
+      type: 'article',
+      url: item.url || (doi ? `https://doi.org/${doi}` : null),
+      citationCount: item.citationCount || 0,
+      isOfficialDoi: !!doi,
+      rawItem: item
+    };
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = SemanticScholarService;
+}
+if (typeof window !== 'undefined') {
+  window.SemanticScholarService = SemanticScholarService;
+}
+
+
+/* --- citation-formatter.js --- */
+/**
+ * Citation Formatter Service
+ * Formats structured metadata into standard academic citation styles:
+ * - APA 7th Edition
+ * - MLA 9th Edition
+ * - Chicago (Author-Date)
+ * - IEEE
+ * - BibTeX
+ * Includes Word (.doc) and HTML academic export generator with hanging indents.
+ */
+
+class CitationFormatter {
+  /**
+   * Format metadata according to chosen style ('apa', 'mla', 'chicago', 'ieee', 'bibtex')
+   */
+  static format(work, style = 'apa') {
+    if (!work) return '';
+
+    switch (style.toLowerCase()) {
+      case 'apa':
+      case 'apa7':
+        return this.toAPA(work, false);
+      case 'mla':
+      case 'mla9':
+        return this.toMLA(work, false);
+      case 'chicago':
+        return this.toChicago(work, false);
+      case 'ieee':
+        return this.toIEEE(work, false);
+      case 'bibtex':
+        return this.toBibTeX(work);
+      default:
+        return this.toAPA(work, false);
+    }
+  }
+
+  /**
+   * Generates short in-text citation (e.g., "(Vaswani et al., 2017)" or "[1]")
+   */
+  static toInText(work, style = 'apa', index = 1) {
+    if (!work) return '';
+    const s = style.toLowerCase();
+    if (s === 'ieee') {
+      return `[${index}]`;
+    }
+
+    const authors = work.authors || [];
+    const year = work.year || 'n.d.';
+    let authorName = 'Unknown';
+
+    if (authors.length === 1) {
+      authorName = authors[0].family || authors[0].name;
+    } else if (authors.length === 2) {
+      const a1 = authors[0].family || authors[0].name;
+      const a2 = authors[1].family || authors[1].name;
+      authorName = (s === 'mla' || s === 'mla9') ? `${a1} and ${a2}` : `${a1} & ${a2}`;
+    } else if (authors.length >= 3) {
+      const a1 = authors[0].family || authors[0].name;
+      authorName = `${a1} et al.`;
+    }
+
+    if (s === 'mla' || s === 'mla9') {
+      return `(${authorName})`;
+    }
+    return `(${authorName}, ${year})`;
+  }
+
+  /**
+   * Format with HTML tags (<i>...</i> and <a>...</a>) for Word / Web exports
+   */
+  static formatHTML(work, style = 'apa') {
+    if (!work) return '';
+
+    switch (style.toLowerCase()) {
+      case 'apa':
+      case 'apa7':
+        return this.toAPA(work, true);
+      case 'mla':
+      case 'mla9':
+        return this.toMLA(work, true);
+      case 'chicago':
+        return this.toChicago(work, true);
+      case 'ieee':
+        return this.toIEEE(work, true);
+      case 'bibtex':
+        return `<pre>${this.toBibTeX(work)}</pre>`;
+      default:
+        return this.toAPA(work, true);
+    }
+  }
+
+  static toAPA(work, isHTML = false) {
+    const authors = work.authors || [];
+    let authorText = 'Unknown';
+
+    if (authors.length === 1) {
+      authorText = this._formatAuthorAPA(authors[0]);
+    } else if (authors.length === 2) {
+      authorText = `${this._formatAuthorAPA(authors[0])}, & ${this._formatAuthorAPA(authors[1])}`;
+    } else if (authors.length > 2 && authors.length <= 20) {
+      const all = authors.map(a => this._formatAuthorAPA(a));
+      const last = all.pop();
+      authorText = `${all.join(', ')}, & ${last}`;
+    } else if (authors.length > 20) {
+      const first19 = authors.slice(0, 19).map(a => this._formatAuthorAPA(a));
+      const last = this._formatAuthorAPA(authors[authors.length - 1]);
+      authorText = `${first19.join(', ')}, ... ${last}`;
+    }
+
+    const yearText = work.year ? `(${work.year})` : '(n.d.)';
+    const titleText = work.title ? `${this._capitalizeSentence(work.title)}.` : '';
+    
+    let container = '';
+    if (work.journal) {
+      if (isHTML) {
+        container = ` <i>${work.journal}</i>`;
+        if (work.volume) {
+          container += `, <i>${work.volume}</i>`;
+          if (work.issue) container += `(${work.issue})`;
+        }
+      } else {
+        container = ` *${work.journal}*`;
+        if (work.volume) {
+          container += `, *${work.volume}*`;
+          if (work.issue) container += `(${work.issue})`;
+        }
+      }
+      if (work.page) {
+        container += `, ${work.page}`;
+      }
+      container += '.';
+    }
+
+    let doiText = '';
+    if (work.doi) {
+      const doiUrl = `https://doi.org/${work.doi}`;
+      doiText = isHTML ? ` <a href="${doiUrl}">${doiUrl}</a>` : ` ${doiUrl}`;
+    } else if (work.url) {
+      doiText = isHTML ? ` <a href="${work.url}">${work.url}</a>` : ` ${work.url}`;
+    }
+
+    return `${authorText} ${yearText}. ${titleText}${container}${doiText}`.replace(/\s+/g, ' ').trim();
+  }
+
+  static toMLA(work, isHTML = false) {
+    const authors = work.authors || [];
+    let authorText = '';
+
+    if (authors.length === 1) {
+      authorText = `${this._formatAuthorMLA(authors[0])}. `;
+    } else if (authors.length === 2) {
+      authorText = `${this._formatAuthorMLA(authors[0])}, and ${authors[1].given ? authors[1].given + ' ' : ''}${authors[1].family || authors[1].name}. `;
+    } else if (authors.length >= 3) {
+      authorText = `${this._formatAuthorMLA(authors[0])}, et al. `;
+    }
+
+    const titleText = work.title ? `"${work.title}." ` : '';
+    let container = '';
+    if (work.journal) {
+      const journalItalic = isHTML ? `<i>${work.journal}</i>` : `*${work.journal}*`;
+      container = journalItalic;
+      if (work.volume) container += `, vol. ${work.volume}`;
+      if (work.issue) container += `, no. ${work.issue}`;
+      if (work.year) container += `, ${work.year}`;
+      if (work.page) container += `, pp. ${work.page}`;
+      container += '. ';
+    } else if (work.year) {
+      container = `${work.year}. `;
+    }
+
+    let doiText = '';
+    if (work.doi) {
+      const doiUrl = `https://doi.org/${work.doi}`;
+      doiText = isHTML ? `<a href="${doiUrl}">${doiUrl}</a>` : doiUrl;
+    } else if (work.url) {
+      doiText = isHTML ? `<a href="${work.url}">${work.url}</a>` : work.url;
+    }
+
+    return `${authorText}${titleText}${container}${doiText}`.trim();
+  }
+
+  static toChicago(work, isHTML = false) {
+    const authors = work.authors || [];
+    let authorText = 'Unknown';
+    if (authors.length > 0) {
+      authorText = this._formatAuthorMLA(authors[0]);
+      if (authors.length === 2) {
+        authorText += `, and ${authors[1].name}`;
+      } else if (authors.length >= 3) {
+        authorText += `, et al.`;
+      }
+    }
+
+    const yearText = work.year ? `${work.year}. ` : 'n.d. ';
+    const titleText = work.title ? `"${work.title}." ` : '';
+    let container = '';
+    if (work.journal) {
+      const journalItalic = isHTML ? `<i>${work.journal}</i>` : `*${work.journal}*`;
+      container = journalItalic;
+      if (work.volume) container += ` ${work.volume}`;
+      if (work.issue) container += `, no. ${work.issue}`;
+      if (work.page) container += `: ${work.page}`;
+      container += '. ';
+    }
+
+    let doiText = '';
+    if (work.doi) {
+      const doiUrl = `https://doi.org/${work.doi}`;
+      doiText = isHTML ? `<a href="${doiUrl}">${doiUrl}</a>` : doiUrl;
+    } else if (work.url) {
+      doiText = isHTML ? `<a href="${work.url}">${work.url}</a>` : work.url;
+    }
+
+    return `${authorText}. ${yearText}${titleText}${container}${doiText}`.trim();
+  }
+
+  static toIEEE(work, isHTML = false) {
+    const authors = work.authors || [];
+    let authorText = 'Unknown';
+    if (authors.length === 1) {
+      authorText = this._formatAuthorIEEE(authors[0]);
+    } else if (authors.length === 2) {
+      authorText = `${this._formatAuthorIEEE(authors[0])} and ${this._formatAuthorIEEE(authors[1])}`;
+    } else if (authors.length > 2) {
+      authorText = isHTML ? `${this._formatAuthorIEEE(authors[0])} <i>et al.</i>` : `${this._formatAuthorIEEE(authors[0])} *et al.*`;
+    }
+
+    const titleText = work.title ? `"${work.title},"` : '';
+    let container = '';
+    if (work.journal) {
+      const journalItalic = isHTML ? ` <i>${work.journal}</i>` : ` *${work.journal}*`;
+      container = journalItalic;
+      if (work.volume) container += `, vol. ${work.volume}`;
+      if (work.issue) container += `, no. ${work.issue}`;
+      if (work.page) container += `, pp. ${work.page}`;
+      if (work.year) container += `, ${work.year}`;
+      container += '.';
+    } else if (work.year) {
+      container = ` ${work.year}.`;
+    }
+
+    let doiText = '';
+    if (work.doi) {
+      doiText = isHTML ? ` doi: <a href="https://doi.org/${work.doi}">${work.doi}</a>.` : ` doi: ${work.doi}.`;
+    }
+
+    return `${authorText}, ${titleText}${container}${doiText}`.trim();
+  }
+
+  static toBibTeX(work) {
+    const firstAuthor = (work.authors && work.authors[0]?.family) 
+      ? work.authors[0].family.toLowerCase().replace(/[^\w]/g, '') 
+      : 'reference';
+    const year = work.year || 'nodate';
+    const firstTitleWord = (work.title || 'work').split(/\s+/)[0].toLowerCase().replace(/[^\w]/g, '');
+    const citeKey = `${firstAuthor}${year}${firstTitleWord}`;
+
+    const authorBib = (work.authors || []).map(a => `${a.family || a.name}, ${a.given || ''}`.trim()).join(' and ');
+
+    return `@article{${citeKey},
+  author    = {${authorBib}},
+  title     = {${work.title || ''}},
+  journal   = {${work.journal || ''}},
+  year      = {${work.year || ''}},
+  volume    = {${work.volume || ''}},
+  number    = {${work.issue || ''}},
+  pages     = {${work.page || ''}},
+  doi       = {${work.doi || ''}},
+  url       = {${work.url || (work.doi ? `https://doi.org/${work.doi}` : '')}}
+}`;
+  }
+
+  /**
+   * Generates a complete Microsoft Word document (.doc) with standard academic layout:
+   * - Hanging Indents (0.5 in / 36pt)
+   * - Times New Roman 12pt
+   * - Double Spacing (line-height: 2.0)
+   * - Proper Section Title ("References" / "Works Cited" / "Bibliography")
+   */
+  static generateWordDocument(results, style = 'apa') {
+    const s = style.toLowerCase();
+    let title = 'References';
+    if (s === 'mla' || s === 'mla9') {
+      title = 'Works Cited';
+    } else if (s === 'chicago') {
+      title = 'Bibliography';
+    } else if (s === 'ieee') {
+      title = 'References';
+    }
+
+    const isIeee = (s === 'ieee');
+
+    const entriesHtml = results.map((r, index) => {
+      let content = '';
+      if (r.verifiedData) {
+        content = this.formatHTML(r.verifiedData, style);
+      } else if (r.correctedCitations) {
+        content = r.correctedCitations[style] || r.correctedCitations['apa'];
+      } else {
+        content = r.raw;
+      }
+
+      if (isIeee) {
+        return `<p class="ref-entry ieee-entry"><span class="ieee-num">[${index + 1}]</span> ${content}</p>`;
+      }
+      return `<p class="ref-entry">${content}</p>`;
+    }).join('\n');
+
+    return `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" 
+      xmlns:w="urn:schemas-microsoft-com:office:word" 
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+      <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    @page {
+      size: 8.5in 11.0in;
+      margin: 1.0in 1.0in 1.0in 1.0in;
+      mso-header-margin: 0.5in;
+      mso-footer-margin: 0.5in;
+      mso-paper-source: 0;
+    }
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 12.0pt;
+      line-height: 2.0;
+      color: #000000;
+      background-color: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    h1.doc-title {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 12.0pt;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 0in;
+      margin-bottom: 24.0pt;
+      line-height: 2.0;
+    }
+    p.ref-entry {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 12.0pt;
+      line-height: 2.0;
+      margin-top: 0in;
+      margin-bottom: 0in;
+      margin-left: 0.5in;
+      text-indent: -0.5in;
+      mso-special-format: hanging-indent;
+    }
+    p.ieee-entry {
+      margin-left: 0.35in;
+      text-indent: -0.35in;
+      line-height: 1.5;
+      margin-bottom: 6.0pt;
+    }
+    span.ieee-num {
+      font-weight: normal;
+      margin-right: 0.1in;
+    }
+    i, em {
+      font-style: italic;
+    }
+    a {
+      color: #0563c1;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1 class="doc-title">${title}</h1>
+  ${entriesHtml}
+</body>
+</html>`;
+  }
+
+  static _formatAuthorAPA(author) {
+    if (!author) return '';
+    if (author.family && author.given) {
+      const initials = author.given.split(/[\s-]+/).map(p => p[0] ? `${p[0].toUpperCase()}.` : '').join(' ');
+      return `${author.family}, ${initials}`;
+    }
+    return author.name || 'Unknown';
+  }
+
+  static _formatAuthorMLA(author) {
+    if (!author) return '';
+    if (author.family && author.given) {
+      return `${author.family}, ${author.given}`;
+    }
+    return author.name || 'Unknown';
+  }
+
+  static _formatAuthorIEEE(author) {
+    if (!author) return '';
+    if (author.family && author.given) {
+      const initials = author.given.split(/[\s-]+/).map(p => p[0] ? `${p[0].toUpperCase()}.` : '').join(' ');
+      return `${initials} ${author.family}`;
+    }
+    return author.name || 'Unknown';
+  }
+
+  static _capitalizeSentence(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = CitationFormatter;
+}
+if (typeof window !== 'undefined') {
+  window.CitationFormatter = CitationFormatter;
+}
+
+
+/* --- verifier-engine.js --- */
+/**
+ * Verifier Engine
+ * Orchestrates multi-tier verification (Crossref + OpenAlex + Semantic Scholar),
+ * computes fuzzy match scores, detects specific field discrepancies,
+ * and formats corrected citations.
+ */
+
+const _CitationParser = (typeof CitationParser !== 'undefined') ? CitationParser : (typeof require !== 'undefined' ? require('./citation-parser.js') : null);
+const _CrossrefService = (typeof CrossrefService !== 'undefined') ? CrossrefService : (typeof require !== 'undefined' ? require('./crossref-service.js') : null);
+const _OpenAlexService = (typeof OpenAlexService !== 'undefined') ? OpenAlexService : (typeof require !== 'undefined' ? require('./openalex-service.js') : null);
+const _SemanticScholarService = (typeof SemanticScholarService !== 'undefined') ? SemanticScholarService : (typeof require !== 'undefined' ? require('./semantic-scholar.js') : null);
+const _CitationFormatter = (typeof CitationFormatter !== 'undefined') ? CitationFormatter : (typeof require !== 'undefined' ? require('./citation-formatter.js') : null);
+
+class VerifierEngine {
+  static async verifyBatch(rawCitationList, onProgress = null) {
+    const results = [];
+    const total = rawCitationList.length;
+
+    for (let i = 0; i < total; i++) {
+      const raw = rawCitationList[i];
+      if (onProgress) {
+        onProgress({ current: i + 1, total, currentText: raw });
+      }
+
+      try {
+        const result = await this.verifySingle(raw);
+        results.push(result);
+      } catch (err) {
+        console.error('[VerifierEngine] Error verifying item:', err);
+        results.push({
+          raw,
+          status: 'error',
+          errorMessage: err.message || 'Verification error',
+          confidence: 0
+        });
+      }
+
+      if (i < total - 1) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+
+    this._detectDuplicates(results);
+    return results;
+  }
+
+  static _detectDuplicates(results) {
+    for (let i = 0; i < results.length; i++) {
+      const itemA = results[i];
+      if (!itemA.verifiedData && !itemA.parsed?.title) continue;
+
+      for (let j = i + 1; j < results.length; j++) {
+        const itemB = results[j];
+        if (!itemB.verifiedData && !itemB.parsed?.title) continue;
+
+        const sameDoi = Boolean(
+          itemA.verifiedData?.doi && itemB.verifiedData?.doi &&
+          itemA.verifiedData.doi.toLowerCase() === itemB.verifiedData.doi.toLowerCase()
+        );
+
+        const titleA = itemA.verifiedData?.title || itemA.parsed?.title || '';
+        const titleB = itemB.verifiedData?.title || itemB.parsed?.title || '';
+        const titleSim = this._stringSimilarity(this._cleanStr(titleA), this._cleanStr(titleB));
+
+        if (sameDoi || (titleSim > 0.90 && titleA.length > 8)) {
+          itemB.isDuplicate = true;
+          itemB.duplicateOf = i + 1;
+          if (!itemB.discrepancies.some(d => d.field === 'duplicate')) {
+            itemB.discrepancies.unshift({
+              field: 'duplicate',
+              message: `⚠️ Duplicate entry: Identical to reference [${i + 1}]`
+            });
+          }
+        }
+      }
+    }
+  }
+
+  static async verifySingle(rawCitation) {
+    const parser = (typeof CitationParser !== 'undefined') ? CitationParser : _CitationParser;
+    const crossref = (typeof CrossrefService !== 'undefined') ? CrossrefService : _CrossrefService;
+    const openalex = (typeof OpenAlexService !== 'undefined') ? OpenAlexService : _OpenAlexService;
+    const semantic = (typeof SemanticScholarService !== 'undefined') ? SemanticScholarService : _SemanticScholarService;
+    const formatter = (typeof CitationFormatter !== 'undefined') ? CitationFormatter : _CitationFormatter;
+
+    const parsed = parser.parse(rawCitation);
+    let candidate = null;
+    let matchMethod = 'search';
+
+    // 1. Direct DOI lookup if DOI was detected in user text
+    if (parsed.doi) {
+      candidate = await crossref.getByDoi(parsed.doi);
+      if (!candidate) {
+        candidate = await openalex.getByDoi(parsed.doi);
+      }
+      if (candidate) {
+        matchMethod = 'doi_lookup';
+      }
+    }
+
+    // 2. Academic Catalog Search if no DOI or DOI didn't resolve
+    if (!candidate) {
+      const [crossrefResults, openalexResults] = await Promise.all([
+        crossref.search(parsed),
+        openalex.search(parsed)
+      ]);
+
+      const pool = [...crossrefResults, ...openalexResults];
+      if (pool.length > 0) {
+        candidate = this._pickBestCandidate(parsed, pool);
+      }
+
+      // 3. Fallback to Semantic Scholar if still nothing solid
+      if (!candidate || candidate._score < 50) {
+        const semanticResults = await semantic.search(parsed);
+        if (semanticResults.length > 0) {
+          const semCandidate = this._pickBestCandidate(parsed, semanticResults);
+          if (semCandidate && (!candidate || semCandidate._score > candidate._score)) {
+            candidate = semCandidate;
+          }
+        }
+      }
+    }
+
+    // Generate Scholar Query Link for safe user-driven lookups
+    const scholarQuery = parsed.title || parsed.cleanQuery || rawCitation;
+    const scholarUrl = `https://scholar.google.com/scholar?q=${encodeURIComponent(scholarQuery)}`;
+
+    if (!candidate) {
+      return {
+        raw: rawCitation,
+        parsed,
+        verifiedData: null,
+        status: 'not_found', // 🔴 Red
+        confidence: 0,
+        discrepancies: [{ field: 'record', message: 'No matching academic record found in Crossref, OpenAlex, or Semantic Scholar. May be fabricated or unpublished.' }],
+        scholarUrl,
+        correctedCitations: null
+      };
+    }
+
+    const evaluation = this._evaluateMatch(parsed, candidate, matchMethod);
+
+    const correctedCitations = {
+      apa: formatter.format(candidate, 'apa'),
+      mla: formatter.format(candidate, 'mla'),
+      chicago: formatter.format(candidate, 'chicago'),
+      ieee: formatter.format(candidate, 'ieee'),
+      bibtex: formatter.format(candidate, 'bibtex')
+    };
+
+    return {
+      raw: rawCitation,
+      parsed,
+      verifiedData: candidate,
+      status: evaluation.status, // 'verified' 🟢 | 'discrepancy' 🟡 | 'not_found' 🔴
+      confidence: evaluation.confidence,
+      discrepancies: evaluation.discrepancies,
+      matchMethod,
+      scholarUrl,
+      correctedCitations
+    };
+  }
+
+  static _pickBestCandidate(parsed, candidates) {
+    let best = null;
+    let highestScore = -1;
+
+    for (const item of candidates) {
+      if (!item || !item.title) continue;
+      const score = this._computeScore(parsed, item);
+      if (score > highestScore) {
+        highestScore = score;
+        best = { ...item, _score: score };
+      }
+    }
+
+    return best;
+  }
+
+  static _computeScore(parsed, candidate) {
+    let score = 0;
+
+    // 1. Title Similarity (0 to 60 points)
+    const titleSim = this._stringSimilarity(
+      this._cleanStr(parsed.title || parsed.cleanQuery || parsed.raw),
+      this._cleanStr(candidate.title)
+    );
+    score += titleSim * 60;
+
+    // 2. Year Match (0 to 20 points)
+    if (parsed.year && candidate.year) {
+      const yearDiff = Math.abs(parsed.year - candidate.year);
+      if (yearDiff === 0) {
+        score += 20;
+      } else if (yearDiff <= 1) {
+        score += 12;
+      } else if (yearDiff <= 3) {
+        score += 5;
+      }
+    } else if (candidate.year) {
+      score += 10;
+    }
+
+    // 3. Author Match (0 to 20 points)
+    if (parsed.authors && parsed.authors.length > 0 && candidate.authors && candidate.authors.length > 0) {
+      const parsedFirst = this._cleanStr(parsed.authors[0]);
+      const matchedAuthor = candidate.authors.some(a => {
+        const family = this._cleanStr(a.family || a.name);
+        return family && (parsedFirst.includes(family) || family.includes(parsedFirst));
+      });
+      if (matchedAuthor) {
+        score += 20;
+      }
+    } else if (candidate.authors && candidate.authors.length > 0) {
+      score += 10;
+    }
+
+    // 4. Citation Count / Prestige tie-breaker
+    if (candidate.citationCount && candidate.citationCount > 500) {
+      score += 5;
+    }
+
+    return Math.min(100, Math.round(score));
+  }
+
+  static _evaluateMatch(parsed, candidate, matchMethod) {
+    const discrepancies = [];
+    let score = candidate._score || this._computeScore(parsed, candidate);
+
+    if (matchMethod === 'doi_lookup') {
+      score = Math.max(score, 85);
+    }
+
+    // Check title match
+    const titleSim = this._stringSimilarity(
+      this._cleanStr(parsed.title || parsed.cleanQuery),
+      this._cleanStr(candidate.title)
+    );
+
+    if (titleSim < 0.75 && parsed.title) {
+      discrepancies.push({
+        field: 'title',
+        expected: candidate.title,
+        provided: parsed.title,
+        message: `Title mismatch (${Math.round(titleSim * 100)}% match)`
+      });
+    }
+
+    // Check year match
+    if (parsed.year && candidate.year && parsed.year !== candidate.year) {
+      discrepancies.push({
+        field: 'year',
+        expected: candidate.year,
+        provided: parsed.year,
+        message: `Publication year error: provided ${parsed.year}, official is ${candidate.year}`
+      });
+    }
+
+    // Check author match
+    if (parsed.authors && parsed.authors.length > 0 && candidate.authors && candidate.authors.length > 0) {
+      const parsedFirst = this._cleanStr(parsed.authors[0]);
+      const hasAuthor = candidate.authors.some(a => {
+        const family = this._cleanStr(a.family || a.name);
+        return family && (parsedFirst.includes(family) || family.includes(parsedFirst));
+      });
+
+      if (!hasAuthor) {
+        discrepancies.push({
+          field: 'author',
+          expected: candidate.authorString || 'Verified Authors',
+          provided: parsed.authorString || parsed.authors.join(', '),
+          message: `First author '${parsed.authors[0]}' not found in verified authors list`
+        });
+      }
+    }
+
+    let status = 'verified';
+    if (score < 50) {
+      status = 'not_found';
+    } else if (discrepancies.length > 0 || score < 85) {
+      status = 'discrepancy';
+    }
+
+    return {
+      status,
+      confidence: score,
+      discrepancies
+    };
+  }
+
+  static _cleanStr(str) {
+    if (!str) return '';
+    return str.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  static _stringSimilarity(s1, s2) {
+    if (!s1 || !s2) return 0;
+    if (s1 === s2) return 1;
+
+    const words1 = new Set(s1.split(' ').filter(w => w.length > 2));
+    const words2 = new Set(s2.split(' ').filter(w => w.length > 2));
+
+    if (words1.size === 0 || words2.size === 0) return 0;
+
+    let intersection = 0;
+    for (const w of words1) {
+      if (words2.has(w)) intersection++;
+    }
+    const union = new Set([...words1, ...words2]).size;
+    const jaccard = union > 0 ? intersection / union : 0;
+
+    if (s1.includes(s2) || s2.includes(s1)) {
+      return Math.max(jaccard, 0.88);
+    }
+
+    return jaccard;
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = VerifierEngine;
+}
+if (typeof window !== 'undefined') {
+  window.VerifierEngine = VerifierEngine;
+}
+
+
+
+/* --- app.js --- */
+/**
+ * Scholar Reference Verifier - Standalone Web Application Controller
+ */
+
+const SAMPLE_REFERENCES = `[1] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., ... & Polosukhin, I. (2017). Attention is all you need. Advances in neural information processing systems, 30.
+[2] LeCun, Y., Bengio, Y., & Hinton, G. (2021). Deep learning. Nature, 521(7553), 436-444.
+[3] Zuckerberg, M., & Musk, E. (2024). Quantum Neural Network Architectures for Telepathic Communication. Journal of Synthetic Artificial Intelligence, 99(1), 1-50.
+[4] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun. Deep Residual Learning for Image Recognition. https://doi.org/10.1109/CVPR.2016.90`;
+
+let currentResults = [];
+let activeFilter = 'all';
+let currentStyle = 'apa';
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  setupEventListeners();
+  setupDragAndDrop();
+  restoreState();
+});
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('scholar_web_theme') || 'dark';
+  if (savedTheme === 'light') {
+    document.body.classList.remove('dark-theme');
+    document.body.classList.add('light-theme');
+  } else {
+    document.body.classList.remove('light-theme');
+    document.body.classList.add('dark-theme');
+  }
+
+  const savedStyle = localStorage.getItem('scholar_web_style') || 'apa';
+  const styleSelect = document.getElementById('citation-style-select');
+  if (styleSelect) {
+    styleSelect.value = savedStyle;
+    currentStyle = savedStyle;
+  }
+}
+
+function saveState() {
+  const inputEl = document.getElementById('reference-input');
+  localStorage.setItem('scholar_web_input', inputEl?.value || '');
+  localStorage.setItem('scholar_web_results', JSON.stringify(currentResults));
+  localStorage.setItem('scholar_web_style', currentStyle);
+  localStorage.setItem('scholar_web_filter', activeFilter);
+}
+
+function restoreState() {
+  const savedInput = localStorage.getItem('scholar_web_input');
+  const inputEl = document.getElementById('reference-input');
+  if (inputEl && savedInput) {
+    inputEl.value = savedInput;
+    updateRefCountHint(savedInput);
+  }
+
+  const savedResultsStr = localStorage.getItem('scholar_web_results');
+  if (savedResultsStr) {
+    try {
+      const savedResults = JSON.parse(savedResultsStr);
+      if (Array.isArray(savedResults) && savedResults.length > 0) {
+        currentResults = savedResults;
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('results-dashboard').style.display = 'flex';
+        updateStats(currentResults);
+        renderCards(currentResults);
+      }
+    } catch (e) {
+      console.warn('Failed to restore results:', e);
+    }
+  }
+}
+
+function setupDragAndDrop() {
+  const dropzone = document.getElementById('textarea-dropzone');
+  if (!dropzone) return;
+
+  ['dragenter', 'dragover'].forEach(name => {
+    dropzone.addEventListener(name, (e) => {
+      e.preventDefault();
+      dropzone.classList.add('drag-active');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(name => {
+    dropzone.addEventListener(name, (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-active');
+    });
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const inputEl = document.getElementById('reference-input');
+        if (inputEl) {
+          inputEl.value = evt.target.result;
+          updateRefCountHint(inputEl.value);
+          saveState();
+          showToast(`Loaded ${file.name}`);
+        }
+      };
+      reader.readAsText(file);
+    }
+  });
+}
+
+function setupEventListeners() {
+  // Theme Toggle
+  document.getElementById('theme-toggle')?.addEventListener('click', () => {
+    const isLight = document.body.classList.toggle('light-theme');
+    document.body.classList.toggle('dark-theme', !isLight);
+    localStorage.setItem('scholar_web_theme', isLight ? 'light' : 'dark');
+  });
+
+  // Citation Style Select
+  document.getElementById('citation-style-select')?.addEventListener('change', (e) => {
+    currentStyle = e.target.value;
+    localStorage.setItem('scholar_web_style', currentStyle);
+    saveState();
+    if (currentResults.length > 0) {
+      renderCards(currentResults);
+    }
+  });
+
+  // Textarea input auto-save
+  const inputEl = document.getElementById('reference-input');
+  let saveTimer = null;
+  inputEl?.addEventListener('input', () => {
+    updateRefCountHint(inputEl.value);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveState();
+    }, 300);
+  });
+
+  // Load sample button
+  document.getElementById('load-sample-btn')?.addEventListener('click', () => {
+    if (inputEl) {
+      inputEl.value = SAMPLE_REFERENCES;
+      updateRefCountHint(inputEl.value);
+      saveState();
+    }
+  });
+
+  // Clear button
+  document.getElementById('clear-input-btn')?.addEventListener('click', () => {
+    if (inputEl) {
+      inputEl.value = '';
+      updateRefCountHint('');
+      saveState();
+    }
+  });
+
+  // Reset All button
+  document.getElementById('reset-all-btn')?.addEventListener('click', () => {
+    resetAllWorkspace();
+  });
+
+  // Upload file button
+  const fileInput = document.getElementById('file-upload-input');
+  document.getElementById('upload-file-btn')?.addEventListener('click', () => {
+    fileInput?.click();
+  });
+
+  fileInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        if (inputEl) {
+          inputEl.value = evt.target.result;
+          updateRefCountHint(inputEl.value);
+          saveState();
+          showToast(`Loaded ${file.name}`);
+        }
+      };
+      reader.readAsText(file);
+    }
+  });
+
+  // Verify button
+  document.getElementById('verify-btn')?.addEventListener('click', () => {
+    startVerification();
+  });
+
+  // Sort A-Z button
+  document.getElementById('sort-az-btn')?.addEventListener('click', () => {
+    sortResultsAlphabetically();
+  });
+
+  // Filter tabs
+  document.querySelectorAll('.filter-tabs .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter;
+      saveState();
+      renderCards(currentResults);
+    });
+  });
+
+  // Copy All button
+  document.getElementById('copy-all-btn')?.addEventListener('click', () => {
+    copyAllCorrected();
+  });
+
+  // Apply to Input button
+  document.getElementById('apply-input-btn')?.addEventListener('click', () => {
+    applyCorrectionsToInput();
+  });
+
+  // Export dropdown
+  const exportBtn = document.getElementById('export-dropdown-btn');
+  const exportPopover = document.getElementById('export-popover');
+  exportBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    exportPopover.style.display = exportPopover.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  document.addEventListener('click', () => {
+    if (exportPopover) exportPopover.style.display = 'none';
+  });
+
+  document.querySelectorAll('#export-popover button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      exportResults(btn.dataset.format);
+    });
+  });
+}
+
+function updateRefCountHint(text) {
+  const hintEl = document.getElementById('ref-count-hint');
+  if (!hintEl) return;
+  const items = CitationParser.splitReferences(text);
+  const count = items.length;
+  hintEl.textContent = `${count} reference${count === 1 ? '' : 's'} detected`;
+}
+
+function resetAllWorkspace() {
+  currentResults = [];
+  activeFilter = 'all';
+
+  const inputEl = document.getElementById('reference-input');
+  if (inputEl) {
+    inputEl.value = '';
+    updateRefCountHint('');
+  }
+
+  localStorage.removeItem('scholar_web_input');
+  localStorage.removeItem('scholar_web_results');
+
+  document.getElementById('results-dashboard').style.display = 'none';
+  document.getElementById('progress-box').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'flex';
+
+  document.querySelectorAll('.filter-tabs .tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === 'all');
+  });
+
+  showToast('Workspace reset & cleared');
+}
+
+function sortResultsAlphabetically() {
+  if (currentResults.length <= 1) return;
+
+  currentResults.sort((a, b) => {
+    const authorA = (a.verifiedData?.authors?.[0]?.family || a.parsed?.authors?.[0] || a.raw).toLowerCase();
+    const authorB = (b.verifiedData?.authors?.[0]?.family || b.parsed?.authors?.[0] || b.raw).toLowerCase();
+    return authorA.localeCompare(authorB);
+  });
+
+  saveState();
+  renderCards(currentResults);
+  showToast('Sorted alphabetically by primary author');
+}
+
+function applyCorrectionsToInput() {
+  const correctedList = currentResults.map((r, i) => {
+    if (r.correctedCitations) {
+      return `[${i + 1}] ${r.correctedCitations[currentStyle] || r.correctedCitations['apa']}`;
+    }
+    return `[${i + 1}] ${r.raw}`;
+  });
+
+  if (correctedList.length === 0) return;
+
+  const inputEl = document.getElementById('reference-input');
+  if (inputEl) {
+    inputEl.value = correctedList.join('\n\n');
+    updateRefCountHint(inputEl.value);
+  }
+
+  saveState();
+  showToast('Replaced input with verified citations!');
+}
+
+async function startVerification() {
+  const inputEl = document.getElementById('reference-input');
+  const rawText = inputEl?.value || '';
+  const refList = CitationParser.splitReferences(rawText);
+
+  if (refList.length === 0) {
+    showToast('Please paste at least one reference to verify.');
+    return;
+  }
+
+  const progressBox = document.getElementById('progress-box');
+  const progressBar = document.getElementById('progress-bar-fill');
+  const progressLabel = document.getElementById('progress-label');
+  const progressPercent = document.getElementById('progress-percent');
+
+  progressBox.style.display = 'block';
+
+  currentResults = await VerifierEngine.verifyBatch(refList, (p) => {
+    const pct = Math.round((p.current / p.total) * 100);
+    progressBar.style.width = `${pct}%`;
+    progressLabel.textContent = `Verifying citation ${p.current} of ${p.total}...`;
+    progressPercent.textContent = `${pct}%`;
+  });
+
+  progressBox.style.display = 'none';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('results-dashboard').style.display = 'flex';
+
+  saveState();
+  updateStats(currentResults);
+  renderCards(currentResults);
+}
+
+function updateStats(results) {
+  let verified = 0;
+  let discrepancy = 0;
+  let notFound = 0;
+  let retracted = 0;
+  let duplicates = 0;
+
+  for (const r of results) {
+    if (r.status === 'verified') verified++;
+    else if (r.status === 'discrepancy') discrepancy++;
+    else notFound++;
+
+    if (r.verifiedData?.isRetracted) retracted++;
+    if (r.isDuplicate) duplicates++;
+  }
+
+  const total = results.length;
+  document.getElementById('val-total').textContent = total;
+  document.getElementById('val-verified').textContent = verified;
+  document.getElementById('val-discrepancy').textContent = discrepancy;
+  document.getElementById('val-not-found').textContent = notFound;
+
+  document.getElementById('count-all').textContent = total;
+  document.getElementById('count-verified').textContent = verified;
+  document.getElementById('count-discrepancy').textContent = discrepancy;
+  document.getElementById('count-not-found').textContent = notFound;
+
+  // Update Integrity Banner
+  const banner = document.getElementById('integrity-banner');
+  const title = document.getElementById('integrity-title');
+  const sub = document.getElementById('integrity-sub');
+  const icon = document.getElementById('integrity-icon');
+
+  const authenticRatio = total > 0 ? Math.round(((verified + discrepancy) / total) * 100) : 100;
+
+  if (banner) {
+    banner.classList.remove('status-good', 'status-warn', 'status-danger');
+
+    if (retracted > 0 || notFound > 0) {
+      banner.classList.add(notFound > total / 2 ? 'status-danger' : 'status-warn');
+      icon.textContent = retracted > 0 ? '⚠️' : '🔍';
+      title.textContent = `Bibliography Integrity: ${authenticRatio}% Authentic`;
+      
+      const alerts = [];
+      if (retracted > 0) alerts.push(`${retracted} retracted publication${retracted > 1 ? 's' : ''}`);
+      if (notFound > 0) alerts.push(`${notFound} unverified/fabricated citation${notFound > 1 ? 's' : ''}`);
+      if (duplicates > 0) alerts.push(`${duplicates} duplicate citation${duplicates > 1 ? 's' : ''}`);
+      sub.textContent = `Caution: ${alerts.join(', ')} detected. Please review flagged items.`;
+    } else {
+      banner.classList.add('status-good');
+      icon.textContent = '🛡️';
+      title.textContent = `Bibliography Integrity: 100% Authentic`;
+      sub.textContent = duplicates > 0 
+        ? `${duplicates} duplicate citation${duplicates > 1 ? 's' : ''} detected. All sources verified.`
+        : `All references verified authentic against academic registries. Ready to publish!`;
+    }
+  }
+}
+
+function renderCards(results) {
+  const container = document.getElementById('cards-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const filtered = results.filter(r => {
+    if (activeFilter === 'all') return true;
+    return r.status === activeFilter;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted); font-size: 13px;">No citations match the selected tab filter.</div>`;
+    return;
+  }
+
+  filtered.forEach((item, idx) => {
+    const card = createCardElement(item, idx);
+    container.appendChild(card);
+  });
+}
+
+function createCardElement(item, idx) {
+  const card = document.createElement('div');
+  card.className = `ref-card status-${item.status}`;
+
+  let badgeLabel = 'Verified Authentic';
+  let badgeIcon = '✓';
+  if (item.status === 'discrepancy') {
+    badgeLabel = 'Discrepancy Fixed';
+    badgeIcon = '⚠';
+  } else if (item.status === 'not_found') {
+    badgeLabel = 'Unverified / Likely Fabricated';
+    badgeIcon = '✕';
+  }
+
+  const correctedText = item.correctedCitations 
+    ? (item.correctedCitations[currentStyle] || item.correctedCitations['apa']) 
+    : null;
+
+  const inTextCitation = item.verifiedData 
+    ? CitationFormatter.toInText(item.verifiedData, currentStyle, idx + 1)
+    : null;
+
+  let retractionBadgeHtml = '';
+  if (item.verifiedData?.isRetracted) {
+    retractionBadgeHtml = `
+      <div class="disc-pill danger" style="font-weight: bold;">
+        ⚠️ RETRACTED PUBLICATION: Formally retracted by the publisher.
+      </div>
+    `;
+  }
+
+  let discTagsHtml = '';
+  if (item.discrepancies && item.discrepancies.length > 0) {
+    discTagsHtml = `
+      <div class="discrepancy-tag-list">
+        ${item.discrepancies.map(d => `<span class="disc-pill ${item.status === 'not_found' || d.field === 'duplicate' ? 'danger' : ''}">${escapeHtml(d.message)}</span>`).join('')}
+      </div>
+    `;
+  }
+
+  let correctedBoxHtml = '';
+  if (correctedText) {
+    correctedBoxHtml = `
+      <div class="card-verified-box">
+        <div class="verified-box-top">
+          <span class="verified-box-title">Verified Citation (${currentStyle.toUpperCase()}):</span>
+          ${inTextCitation ? `<span class="intext-preview">In-text: <strong class="copy-intext-btn" data-intext="${escapeHtml(inTextCitation)}" title="Click to copy in-text citation">${escapeHtml(inTextCitation)}</strong></span>` : ''}
+        </div>
+        <div class="verified-citation-text">${escapeHtml(correctedText)}</div>
+      </div>
+    `;
+  }
+
+  let citationBadge = '';
+  if (item.verifiedData?.citationCount && item.verifiedData.citationCount > 50) {
+    const countFormatted = item.verifiedData.citationCount > 1000 
+      ? `${Math.round(item.verifiedData.citationCount / 1000)}k+` 
+      : item.verifiedData.citationCount;
+    citationBadge = `<span class="cite-count-badge" title="Academic citations received">⭐️ ${countFormatted} cites</span>`;
+  }
+
+  let actionsHtml = `
+    <div class="card-actions-bar">
+      <div class="btn-group">
+        ${correctedText ? `
+          <button class="mini-action-btn primary-action copy-card-btn" data-text="${encodeURIComponent(correctedText)}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            Copy Citation
+          </button>
+        ` : ''}
+        ${item.verifiedData?.oaUrl ? `
+          <a href="${item.verifiedData.oaUrl}" target="_blank" rel="noopener noreferrer" class="mini-action-btn oa-action" title="Direct Legal Open Access PDF">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            Free PDF
+          </a>
+        ` : ''}
+        ${item.verifiedData?.doi ? `
+          <button class="mini-action-btn copy-doi-btn" data-doi="${encodeURIComponent(item.verifiedData.doi)}" title="Copy DOI URL">
+            DOI
+          </button>
+        ` : ''}
+        ${item.verifiedData?.url ? `
+          <a href="${item.verifiedData.url}" target="_blank" rel="noopener noreferrer" class="mini-action-btn" title="View official publisher source">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            Source
+          </a>
+        ` : ''}
+      </div>
+      <a href="${item.scholarUrl}" target="_blank" rel="noopener noreferrer" class="mini-action-btn" title="Search citation on Google Scholar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        Scholar Search
+      </a>
+    </div>
+  `;
+
+  card.innerHTML = `
+    <div class="card-header-line">
+      <div style="display:flex; align-items:center; gap: 8px;">
+        <span class="status-badge ${item.status}">
+          <span>${badgeIcon}</span>
+          <span>${badgeLabel}</span>
+        </span>
+        ${citationBadge}
+      </div>
+      <span class="confidence-rate">Confidence: ${item.confidence}%</span>
+    </div>
+    <div class="card-raw-text">
+      <strong>Provided:</strong> ${escapeHtml(item.raw)}
+    </div>
+    ${retractionBadgeHtml}
+    ${discTagsHtml}
+    ${correctedBoxHtml}
+    ${actionsHtml}
+  `;
+
+  card.querySelector('.copy-card-btn')?.addEventListener('click', (e) => {
+    const textToCopy = decodeURIComponent(e.currentTarget.dataset.text);
+    copyToClipboard(textToCopy);
+  });
+
+  card.querySelector('.copy-doi-btn')?.addEventListener('click', (e) => {
+    const doi = decodeURIComponent(e.currentTarget.dataset.doi);
+    copyToClipboard(`https://doi.org/${doi}`);
+  });
+
+  card.querySelector('.copy-intext-btn')?.addEventListener('click', (e) => {
+    const inText = e.currentTarget.dataset.intext;
+    copyToClipboard(inText);
+  });
+
+  return card;
+}
+
+function copyAllCorrected() {
+  const correctedList = currentResults.map((r, i) => {
+    if (r.correctedCitations) {
+      return `[${i + 1}] ${r.correctedCitations[currentStyle] || r.correctedCitations['apa']}`;
+    }
+    return `[${i + 1}] ${r.raw} (Unverified)`;
+  });
+
+  if (correctedList.length === 0) return;
+  copyToClipboard(correctedList.join('\n\n'));
+}
+
+function exportResults(format) {
+  let content = '';
+  let filename = `verified_references_${Date.now()}`;
+  let mime = 'text/plain';
+
+  if (format === 'word') {
+    filename = `references_${currentStyle}_${Date.now()}.doc`;
+    mime = 'application/msword';
+    content = CitationFormatter.generateWordDocument(currentResults, currentStyle);
+  } else if (format === 'bib') {
+    filename += '.bib';
+    content = currentResults
+      .map(r => r.correctedCitations?.bibtex || `% Unverified: ${r.raw}`)
+      .join('\n\n');
+  } else if (format === 'csv') {
+    filename += '.csv';
+    mime = 'text/csv';
+    const rows = [
+      ['Index', 'Status', 'Confidence', 'Original Citation', 'Verified Title', 'Verified Year', 'DOI', 'Corrected Citation']
+    ];
+    currentResults.forEach((r, i) => {
+      rows.push([
+        i + 1,
+        r.status,
+        `${r.confidence}%`,
+        `"${(r.raw || '').replace(/"/g, '""')}"`,
+        `"${(r.verifiedData?.title || '').replace(/"/g, '""')}"`,
+        r.verifiedData?.year || '',
+        r.verifiedData?.doi || '',
+        `"${(r.correctedCitations?.[currentStyle] || '').replace(/"/g, '""')}"`
+      ]);
+    });
+    content = rows.map(row => row.join(',')).join('\n');
+  } else {
+    filename += '.txt';
+    content = currentResults.map((r, i) => {
+      const statusStr = r.status.toUpperCase();
+      const corrected = r.correctedCitations ? r.correctedCitations[currentStyle] : 'N/A';
+      return `[${i + 1}] STATUS: ${statusStr} (Confidence: ${r.confidence}%)\nORIGINAL: ${r.raw}\nCORRECTED: ${corrected}\nSCHOLAR LINK: ${r.scholarUrl}\n`;
+    }).join('\n----------------------------------------\n\n');
+  }
+
+  downloadFile(content, filename, mime);
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8;` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${filename}`);
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Copied to clipboard!');
+    }).catch(() => {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const temp = document.createElement('textarea');
+  temp.value = text;
+  document.body.appendChild(temp);
+  temp.select();
+  document.execCommand('copy');
+  document.body.removeChild(temp);
+  showToast('Copied to clipboard!');
+}
+
+function showToast(msg) {
+  let toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(() => {
+    toast.style.display = 'none';
+  }, 2000);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+</script>
+</body>
+</html>
