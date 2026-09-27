@@ -995,7 +995,7 @@ textarea::placeholder {
             <span class="brand-name">Scholar Verifier</span>
             <span class="badge-tag">Academic Web Edition</span>
           </div>
-          <span class="brand-sub">Crossref • OpenAlex • Semantic Scholar</span>
+          <span class="brand-sub">Crossref • OpenAlex • arXiv • Europe PMC</span>
         </div>
       </div>
 
@@ -1027,9 +1027,10 @@ textarea::placeholder {
     <div class="hero-container">
       <div class="hero-badge">⚡ 100% Free & Open Academic Citation Verification</div>
       <h1>Verify Scholarly References & Fix Citation Errors</h1>
-      <p>Instantly cross-check your manuscript bibliography against 250M+ verified works on Crossref and OpenAlex. Detect year typos, retracted papers, and hallucinated references with zero CAPTCHAs.</p>
+      <p>Instantly cross-check your manuscript bibliography against 250M+ verified works on Crossref, OpenAlex, arXiv, and Europe PMC. Detect year typos, retracted papers, and hallucinated references with zero CAPTCHAs.</p>
     </div>
   </header>
+
 
   <!-- Main Workspace Container -->
   <main class="workspace-container">
@@ -1126,7 +1127,7 @@ textarea::placeholder {
           </div>
           <div class="stat-card not-found" id="stat-not-found">
             <div class="stat-num" id="val-not-found">0</div>
-            <div class="stat-text">Unverified / Fake</div>
+            <div class="stat-text">Unindexed / Check</div>
           </div>
         </div>
 
@@ -1136,8 +1137,9 @@ textarea::placeholder {
             <button class="tab-btn active" data-filter="all">All (<span id="count-all">0</span>)</button>
             <button class="tab-btn" data-filter="verified">Verified (<span id="count-verified">0</span>)</button>
             <button class="tab-btn" data-filter="discrepancy">Discrepancies (<span id="count-discrepancy">0</span>)</button>
-            <button class="tab-btn" data-filter="not_found">Unverified (<span id="count-not-found">0</span>)</button>
+            <button class="tab-btn" data-filter="not_found">Unindexed / Check (<span id="count-not-found">0</span>)</button>
           </div>
+
 
           <div class="toolbar-actions">
             <button id="sort-az-btn" class="btn-secondary-sm" title="Sort references alphabetically by author surname">
@@ -1245,19 +1247,20 @@ class CitationParser {
     };
 
     // 1. Extract DOI
-    const doiMatch = text.match(/(?:https?:\/\/doi\.org\/|doi:\s*|doi\.org\/)?(10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)/i);
+    const doiMatch = text.match(/(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*|doi\.org\/)?(10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)/i);
     if (doiMatch) {
-      result.doi = doiMatch[1].replace(/[\.,;\)]+$/, '');
+      result.doi = doiMatch[1].replace(/[\.,;\)\]\>]+$/, '');
     }
 
     // 2. Extract arXiv ID
-    const arxivMatch = text.match(/(?:arXiv:\s*|arxiv\.org\/(?:abs|pdf)\/)(\d{4}\.\d{4,5}(?:v\d+)?|[a-z\-]+(?:\.[A-Z]{2})?\/\d{7})/i);
+    const arxivMatch = text.match(/(?:arXiv:\s*|arxiv\.org\/(?:abs|pdf)\/)(\d{4}\.\d{4,5}(?:v\d+)?|[a-z\-]+(?:\.[A-Z]{2})?\/\d{7})/i) ||
+                       (text.toLowerCase().includes('arxiv') ? text.match(/\b(\d{4}\.\d{4,5})\b/) : null);
     if (arxivMatch) {
-      result.arxivId = arxivMatch[1];
+      result.arxivId = arxivMatch[1].replace(/v\d+$/, '');
     }
 
     // 3. Extract Year (4-digit year between 1800 and 2099)
-    const yearMatch = text.match(/(?:\(|\b)(19\d\d|20\d\d)(?:\)|\b)/);
+    const yearMatch = text.match(/(?:\(|\b)(19\d\d|20\d\d)[a-z]?(?:\)|\b)/);
     if (yearMatch) {
       result.year = parseInt(yearMatch[1], 10);
     }
@@ -1279,47 +1282,64 @@ class CitationParser {
       .replace(/\.{3,}/g, ' ') // replace ellipsis ... with space
       .trim();
 
-    // Check if title is enclosed in quotes
+    // Check if title is enclosed in quotes ("..." or “...”)
     const quoteMatch = clean.match(/["“]([^"”]{5,})["”]/);
     if (quoteMatch) {
-      result.title = quoteMatch[1].trim();
+      result.title = quoteMatch[1].replace(/[\.,]+$/, '').trim();
       const parts = clean.split(quoteMatch[0]);
       if (parts[0]) {
-        result.authorString = parts[0].replace(/\(\d{4}\)|\d{4}/g, '').replace(/[,.;]+$/, '').trim();
+        result.authorString = parts[0].replace(/\(\d{4}[a-z]?\)|\b\d{4}\b/g, '').replace(/[,.;\s]+$/, '').trim();
       }
       if (parts[1]) {
         result.venue = parts[1].replace(/^[,\s.]+/, '').trim();
       }
     } else {
-      // Pattern 1: Author (Year). Title. Venue.
-      const standardYearPattern = /^(.*?)\s*\((19\d\d|20\d\d)\)\s*[\.\:\,]\s*(.*?)(?:\.|$)(.*)/;
-      const match = clean.match(standardYearPattern);
+      // Case A: Author (Year). Title. Venue. OR Author, Year. Title. Venue.
+      const yearRegex = /^(.*?)(?:,\s*|\s+)\(?(19\d\d|20\d\d)[a-z]?\)?\s*[\.\:\,]\s*(.*)$/;
+      const match = clean.match(yearRegex);
 
-      if (match) {
-        result.authorString = match[1].trim();
+      if (match && match[1].length > 2 && match[3].length > 5) {
+        result.authorString = match[1].replace(/[,;\s]+$/, '').trim();
         if (!result.year) {
           result.year = parseInt(match[2], 10);
         }
-        result.title = match[3].trim();
-        result.venue = match[4] ? match[4].replace(/^[.,\s]+/, '').trim() : '';
+        const rest = match[3].trim();
+        // Protect initials, abbreviations, and sentence endings
+        const protectedRest = rest
+          .replace(/\b([A-Z])\.\s*(?=[A-Z]\.|[a-z]|,|&|and\b)/g, '$1_DOT_ ')
+          .replace(/\b(et al|al|ed|eds|vol|no|pp|vs|approx|e\.g|i\.e)\.\s*/gi, '$1_DOT_ ');
+
+        const segments = protectedRest.split(/\.\s+/).map(s => s.replace(/_DOT_\s*/g, '. ').trim());
+
+        if (segments.length >= 2) {
+          result.title = segments[0];
+          result.venue = segments.slice(1).join('. ');
+        } else {
+          result.title = rest;
+        }
       } else {
-        // Fallback: Split by period followed by space
-        const segments = clean.split(/\.\s+/).filter(s => s.trim().length > 0);
+        // Case B: Fallback with smart initial protection (protects J. D. Smith etc.)
+        const protectedClean = clean
+          .replace(/\b([A-Z])\.\s*(?=[A-Z]\.|[a-z]|,|&|and\b)/g, '$1_DOT_ ')
+          .replace(/\b(et al|al|ed|eds|vol|no|pp|vs|approx|e\.g|i\.e)\.\s*/gi, '$1_DOT_ ');
+
+        const segments = protectedClean.split(/\.\s+/).map(s => s.replace(/_DOT_\s*/g, '. ').trim()).filter(s => s.length > 0);
+
         if (segments.length >= 3) {
-          result.authorString = segments[0].replace(/\(\d{4}\)/g, '').trim();
-          result.title = segments[1].trim();
-          result.venue = segments.slice(2).join('. ').trim();
+          result.authorString = segments[0].replace(/\(\d{4}[a-z]?\)/g, '').trim();
+          result.title = segments[1];
+          result.venue = segments.slice(2).join('. ');
         } else if (segments.length === 2) {
-          result.authorString = segments[0].replace(/\(\d{4}\)/g, '').trim();
-          result.title = segments[1].trim();
+          result.authorString = segments[0].replace(/\(\d{4}[a-z]?\)/g, '').trim();
+          result.title = segments[1];
         } else {
           result.title = clean;
         }
       }
     }
 
-    // Clean title from stray quotes or punctuation
-    result.title = result.title.replace(/^["'“]+|["'”]+$/g, '').trim();
+    // Clean title from stray quotes, trailing punctuation
+    result.title = result.title.replace(/^["'“]+|["'”\.,;]+$/g, '').trim();
 
     // Parse authors from authorString
     if (result.authorString) {
@@ -1333,25 +1353,57 @@ class CitationParser {
       .replace(/&/g, ',')
       .replace(/\band\b/gi, ',');
 
-    return cleaned
+    const tokens = cleaned
       .split(/[,;]/)
-      .map(a => a.trim())
-      .filter(a => a.length > 1 && !/^\d+$/.test(a));
+      .map(t => t.trim())
+      .filter(t => t.length > 0 && !/^\d+$/.test(t));
+
+    const authors = [];
+    let i = 0;
+    while (i < tokens.length) {
+      const tok = tokens[i];
+      if (/^[A-Z](\.[A-Z])*\.?$/.test(tok) || /^[A-Z]\.?$/.test(tok)) {
+        if (authors.length > 0) {
+          authors[authors.length - 1] += `, ${tok}`;
+        } else if (i + 1 < tokens.length) {
+          authors.push(`${tokens[i + 1]}, ${tok}`);
+          i++;
+        }
+      } else {
+        if (i + 1 < tokens.length && /^[A-Z](\s*\.?\s*[A-Z])*\.?$/.test(tokens[i + 1])) {
+          authors.push(`${tok}, ${tokens[i + 1]}`);
+          i++;
+        } else {
+          authors.push(tok);
+        }
+      }
+      i++;
+    }
+
+    return authors.map(a => a.trim()).filter(a => a.length > 1);
   }
 
   static _buildSearchQuery(parsed) {
     const parts = [];
-    if (parsed.title && parsed.title.length > 5) {
+    if (parsed.title) {
       const cleanedTitle = parsed.title.replace(/[^\w\s-]/g, ' ').replace(/\s+/g, ' ').trim();
       parts.push(cleanedTitle);
-    } else {
-      parts.push(parsed.raw.replace(/https?:\/\/[^\s]+/g, '').substring(0, 150));
     }
 
+    const wordCount = (parsed.title || '').trim().split(/\s+/).length;
     if (parsed.authors && parsed.authors.length > 0) {
-      const firstAuthor = parsed.authors[0].replace(/[^a-zA-Z]/g, '');
-      if (firstAuthor.length > 2) {
-        parts.push(firstAuthor);
+      const m1 = parsed.authors[0].match(/[a-zA-Z]{3,}/);
+      if (m1) parts.push(m1[0]);
+
+      if (wordCount <= 3) {
+        if (parsed.authors.length > 1) {
+          const m2 = parsed.authors[1].match(/[a-zA-Z]{3,}/);
+          if (m2) parts.push(m2[0]);
+        }
+        if (parsed.venue) {
+          const venueWord = parsed.venue.replace(/[^\w\s]/g, '').trim().split(/\s+/)[0];
+          if (venueWord && venueWord.length > 2) parts.push(venueWord);
+        }
       }
     }
 
@@ -1359,15 +1411,14 @@ class CitationParser {
   }
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = CitationParser;
-}
+
 if (typeof window !== 'undefined') {
   window.CitationParser = CitationParser;
 }
 
 
 /* --- crossref-service.js --- */
+
 /**
  * Crossref Service
  * Queries the official Crossref REST API using the polite pool.
@@ -1383,7 +1434,7 @@ class CrossrefService {
    */
   static async getByDoi(doi) {
     try {
-      const cleanDoi = encodeURIComponent(doi.trim());
+      const cleanDoi = encodeURIComponent(doi.replace(/^https?:\/\/doi\.org\//i, '').replace(/^doi:\s*/i, '').trim());
       const url = `${this.BASE_URL}/${cleanDoi}?mailto=${this.POLITE_EMAIL}`;
       const res = await fetch(url);
       if (!res.ok) {
@@ -1405,31 +1456,40 @@ class CrossrefService {
     try {
       const params = new URLSearchParams();
       params.append('mailto', this.POLITE_EMAIL);
-      params.append('rows', '3');
+      params.append('rows', '5');
 
-      if (parsed.title && parsed.title.length > 5) {
-        params.append('query.bibliographic', parsed.title);
-      } else if (parsed.cleanQuery) {
-        params.append('query.bibliographic', parsed.cleanQuery);
-      } else {
-        params.append('query.bibliographic', parsed.raw);
+      const wordCount = (parsed.title || '').trim().split(/\s+/).length;
+      const titleQuery = (wordCount <= 3 && parsed.cleanQuery) ? parsed.cleanQuery : (parsed.title || parsed.cleanQuery || parsed.raw);
+      params.append('query.bibliographic', titleQuery);
+
+      let firstAuthorFamily = '';
+      if (parsed.authors && parsed.authors.length > 0) {
+        const m = parsed.authors[0].match(/[a-zA-Z]{3,}/);
+        if (m) firstAuthorFamily = m[0];
       }
 
-      if (parsed.authors && parsed.authors.length > 0) {
-        const firstAuthor = parsed.authors[0].split(/\s+/).pop();
-        if (firstAuthor) {
-          params.append('query.author', firstAuthor);
+      if (firstAuthorFamily) {
+        params.append('query.author', firstAuthorFamily);
+      }
+
+      let url = `${this.BASE_URL}?${params.toString()}`;
+      let res = await fetch(url);
+      if (!res.ok) return [];
+      let data = await res.json();
+      let items = data.message?.items || [];
+
+      // If author filter yielded 0 results, retry without author filter
+      if (items.length === 0 && firstAuthorFamily) {
+        params.delete('query.author');
+        url = `${this.BASE_URL}?${params.toString()}`;
+        res = await fetch(url);
+        if (res.ok) {
+          data = await res.json();
+          items = data.message?.items || [];
         }
       }
 
-      const url = `${this.BASE_URL}?${params.toString()}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        return [];
-      }
-      const data = await res.json();
-      const items = data.message?.items || [];
-      return items.map(item => this._normalizeWork(item));
+      return items.map(item => this._normalizeWork(item)).filter(Boolean);
     } catch (err) {
       console.warn('[CrossrefService] Search failed:', err);
       return [];
@@ -1451,14 +1511,16 @@ class CrossrefService {
       };
     });
 
-    // Year extraction
+    // Year extraction: Prioritize issued > published-print > published-online > published > created
     let year = null;
-    if (item.published?.['date-parts']?.[0]?.[0]) {
-      year = item.published['date-parts'][0][0];
+    if (item.issued?.['date-parts']?.[0]?.[0]) {
+      year = item.issued['date-parts'][0][0];
     } else if (item['published-print']?.['date-parts']?.[0]?.[0]) {
       year = item['published-print']['date-parts'][0][0];
     } else if (item['published-online']?.['date-parts']?.[0]?.[0]) {
       year = item['published-online']['date-parts'][0][0];
+    } else if (item.published?.['date-parts']?.[0]?.[0]) {
+      year = item.published['date-parts'][0][0];
     } else if (item.created?.['date-parts']?.[0]?.[0]) {
       year = item.created['date-parts'][0][0];
     }
@@ -1502,6 +1564,181 @@ if (typeof window !== 'undefined') {
 }
 
 
+/* --- arxiv-service.js --- */
+/**
+ * arXiv Official REST API Service
+ * Directly queries arXiv preprints for CS, AI, Math, Physics.
+ * Free, open, zero CAPTCHAs, high coverage.
+ */
+
+class ArxivService {
+  static async getById(arxivId) {
+    try {
+      const cleanId = arxivId.replace(/^arxiv:\s*/i, '').replace(/v\d+$/, '').trim();
+      const url = `https://export.arxiv.org/api/query?id_list=${encodeURIComponent(cleanId)}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const text = await res.text();
+      return this._parseAtom(text, cleanId);
+    } catch (err) {
+      console.warn('[ArxivService] Lookup failed:', err);
+      return null;
+    }
+  }
+
+  static async search(parsed) {
+    try {
+      if (parsed.arxivId) {
+        const item = await this.getById(parsed.arxivId);
+        if (item) return [item];
+      }
+      const query = parsed.title || parsed.cleanQuery;
+      if (!query || query.length < 5) return [];
+      const cleanQ = query.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+      const url = `https://export.arxiv.org/api/query?search_query=ti:"${encodeURIComponent(cleanQ)}"&max_results=3`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const text = await res.text();
+      return this._parseAtomList(text);
+    } catch (err) {
+      console.warn('[ArxivService] Search failed:', err);
+      return [];
+    }
+  }
+
+  static _parseAtom(xmlText, fallbackId = '') {
+    const list = this._parseAtomList(xmlText, fallbackId);
+    return list.length > 0 ? list[0] : null;
+  }
+
+  static _parseAtomList(xmlText, fallbackId = '') {
+    const entries = xmlText.split(/<entry[\s>]/).slice(1);
+    const results = [];
+
+    for (const entry of entries) {
+      const titleMatch = entry.match(/<title>([\s\S]*?)<\/title>/);
+      const title = titleMatch ? titleMatch[1].replace(/<\/?title>/g, '').trim().replace(/\s+/g, ' ') : '';
+      if (!title) continue;
+
+      const authorMatches = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/g)];
+      const authors = authorMatches.map(m => {
+        const fullName = m[1].trim();
+        const parts = fullName.split(/\s+/);
+        const family = parts.length > 1 ? parts[parts.length - 1] : fullName;
+        const given = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
+        return { family, given, name: fullName };
+      });
+
+      const pubMatch = entry.match(/<published>(\d{4})-\d{2}-\d{2}/);
+      const year = pubMatch ? parseInt(pubMatch[1], 10) : null;
+
+      const idMatch = entry.match(/<id>http:\/\/arxiv\.org\/abs\/([\s\S]*?)<\/id>/);
+      const arxivId = idMatch ? idMatch[1].trim().replace(/v\d+$/, '') : fallbackId;
+      const doi = arxivId ? `10.48550/arXiv.${arxivId}` : null;
+      const url = arxivId ? `https://arxiv.org/abs/${arxivId}` : null;
+      const pdfUrl = arxivId ? `https://arxiv.org/pdf/${arxivId}.pdf` : null;
+
+      results.push({
+        source: 'arXiv',
+        doi,
+        title,
+        authors,
+        authorString: authors.map(a => a.name).join(', '),
+        year,
+        journal: 'arXiv preprint',
+        volume: '',
+        issue: '',
+        page: arxivId ? `arXiv:${arxivId}` : '',
+        publisher: 'arXiv',
+        type: 'preprint',
+        url,
+        openAccess: true,
+        oaUrl: pdfUrl,
+        isRetracted: false,
+        isOfficialDoi: !!doi
+      });
+    }
+
+    return results;
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = ArxivService;
+}
+if (typeof window !== 'undefined') {
+  window.ArxivService = ArxivService;
+}
+
+
+/* --- europe-pmc.js --- */
+/**
+ * Europe PMC Service
+ * Free, open access bibliographic API covering PubMed, PMC, bioRxiv, and medRxiv.
+ */
+
+class EuropePmcService {
+  static BASE_URL = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
+
+  static async search(parsed) {
+    try {
+      const query = parsed.title && parsed.title.length > 5 ? parsed.title : (parsed.cleanQuery || parsed.raw);
+      const cleanQ = query.replace(/[^\w\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+      const url = `${this.BASE_URL}?query=${encodeURIComponent(cleanQ)}&format=json&pageSize=3`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const list = data.resultList?.result || [];
+      return list.map(item => this._normalizeWork(item)).filter(Boolean);
+    } catch (err) {
+      console.warn('[EuropePmcService] Search failed:', err);
+      return [];
+    }
+  }
+
+  static _normalizeWork(item) {
+    if (!item || !item.title) return null;
+
+    const authorString = item.authorString || '';
+    const authors = authorString.split(/,\s*/).map(name => {
+      const parts = name.trim().split(/\s+/);
+      const family = parts[0] || name;
+      const given = parts.slice(1).join(' ');
+      return { family, given, name: name.trim() };
+    });
+
+    const year = item.pubYear ? parseInt(item.pubYear, 10) : null;
+    const cleanTitle = item.title.replace(/\.$/, '').trim();
+
+    return {
+      source: 'Europe PMC / PubMed',
+      doi: item.doi || null,
+      title: cleanTitle,
+      authors,
+      authorString,
+      year,
+      journal: item.journalTitle || '',
+      volume: item.journalVolume || '',
+      issue: item.issue || '',
+      page: item.pageInfo || '',
+      publisher: '',
+      type: 'article',
+      url: item.doi ? `https://doi.org/${item.doi}` : (item.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${item.pmid}/` : null),
+      isRetracted: item.hasRetraction === 'Y',
+      isOfficialDoi: !!item.doi,
+      citationCount: item.citedByCount || 0
+    };
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = EuropePmcService;
+}
+if (typeof window !== 'undefined') {
+  window.EuropePmcService = EuropePmcService;
+}
+
+
 /* --- openalex-service.js --- */
 /**
  * OpenAlex Service
@@ -1518,7 +1755,7 @@ class OpenAlexService {
    */
   static async getByDoi(doi) {
     try {
-      const cleanDoi = doi.trim();
+      const cleanDoi = doi.replace(/^https?:\/\/doi\.org\//i, '').replace(/^doi:\s*/i, '').trim();
       const url = `${this.BASE_URL}/https://doi.org/${cleanDoi}?mailto=${this.POLITE_EMAIL}`;
       const res = await fetch(url);
       if (!res.ok) return null;
@@ -1547,7 +1784,7 @@ class OpenAlexService {
 
       const data = await res.json();
       const results = data.results || [];
-      return results.map(item => this._normalizeWork(item));
+      return results.map(item => this._normalizeWork(item)).filter(Boolean);
     } catch (err) {
       console.warn('[OpenAlexService] Search failed:', err);
       return [];
@@ -1612,7 +1849,8 @@ class SemanticScholarService {
 
   static async getByDoi(doi) {
     try {
-      const url = `${this.BASE_URL}/DOI:${encodeURIComponent(doi)}?fields=title,authors,year,venue,publicationVenue,externalIds,url,citationCount`;
+      const cleanDoi = encodeURIComponent(doi.replace(/^https?:\/\/doi\.org\//i, '').replace(/^doi:\s*/i, '').trim());
+      const url = `${this.BASE_URL}/DOI:${cleanDoi}?fields=title,authors,year,venue,publicationVenue,externalIds,url,citationCount`;
       const res = await fetch(url);
       if (!res.ok) return null;
       const data = await res.json();
@@ -1637,7 +1875,7 @@ class SemanticScholarService {
 
       const data = await res.json();
       const items = data.data || [];
-      return items.map(item => this._normalizeWork(item));
+      return items.map(item => this._normalizeWork(item)).filter(Boolean);
     } catch (err) {
       console.warn('[SemanticScholarService] Search failed:', err);
       return [];
@@ -1685,6 +1923,7 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
   window.SemanticScholarService = SemanticScholarService;
 }
+
 
 
 /* --- citation-formatter.js --- */
@@ -2117,16 +2356,19 @@ if (typeof window !== 'undefined') {
 /* --- verifier-engine.js --- */
 /**
  * Verifier Engine
- * Orchestrates multi-tier verification (Crossref + OpenAlex + Semantic Scholar),
+ * Orchestrates multi-tier verification (Crossref + arXiv + Europe PMC + OpenAlex + Semantic Scholar),
  * computes fuzzy match scores, detects specific field discrepancies,
  * and formats corrected citations.
  */
 
 const _CitationParser = (typeof CitationParser !== 'undefined') ? CitationParser : (typeof require !== 'undefined' ? require('./citation-parser.js') : null);
 const _CrossrefService = (typeof CrossrefService !== 'undefined') ? CrossrefService : (typeof require !== 'undefined' ? require('./crossref-service.js') : null);
+const _ArxivService = (typeof ArxivService !== 'undefined') ? ArxivService : (typeof require !== 'undefined' ? require('./arxiv-service.js') : null);
+const _EuropePmcService = (typeof EuropePmcService !== 'undefined') ? EuropePmcService : (typeof require !== 'undefined' ? require('./europe-pmc.js') : null);
 const _OpenAlexService = (typeof OpenAlexService !== 'undefined') ? OpenAlexService : (typeof require !== 'undefined' ? require('./openalex-service.js') : null);
 const _SemanticScholarService = (typeof SemanticScholarService !== 'undefined') ? SemanticScholarService : (typeof require !== 'undefined' ? require('./semantic-scholar.js') : null);
 const _CitationFormatter = (typeof CitationFormatter !== 'undefined') ? CitationFormatter : (typeof require !== 'undefined' ? require('./citation-formatter.js') : null);
+
 
 class VerifierEngine {
   static async verifyBatch(rawCitationList, onProgress = null) {
@@ -2146,9 +2388,11 @@ class VerifierEngine {
         console.error('[VerifierEngine] Error verifying item:', err);
         results.push({
           raw,
-          status: 'error',
+          status: 'not_found',
           errorMessage: err.message || 'Verification error',
-          confidence: 0
+          confidence: 0,
+          discrepancies: [{ field: 'error', message: 'Verification error: ' + (err.message || 'Registry unavailable') }],
+          scholarUrl: `https://scholar.google.com/scholar?q=${encodeURIComponent(raw)}`
         });
       }
 
@@ -2196,6 +2440,8 @@ class VerifierEngine {
   static async verifySingle(rawCitation) {
     const parser = (typeof CitationParser !== 'undefined') ? CitationParser : _CitationParser;
     const crossref = (typeof CrossrefService !== 'undefined') ? CrossrefService : _CrossrefService;
+    const arxiv = (typeof ArxivService !== 'undefined') ? ArxivService : _ArxivService;
+    const europepmc = (typeof EuropePmcService !== 'undefined') ? EuropePmcService : _EuropePmcService;
     const openalex = (typeof OpenAlexService !== 'undefined') ? OpenAlexService : _OpenAlexService;
     const semantic = (typeof SemanticScholarService !== 'undefined') ? SemanticScholarService : _SemanticScholarService;
     const formatter = (typeof CitationFormatter !== 'undefined') ? CitationFormatter : _CitationFormatter;
@@ -2207,7 +2453,7 @@ class VerifierEngine {
     // 1. Direct DOI lookup if DOI was detected in user text
     if (parsed.doi) {
       candidate = await crossref.getByDoi(parsed.doi);
-      if (!candidate) {
+      if (!candidate && openalex) {
         candidate = await openalex.getByDoi(parsed.doi);
       }
       if (candidate) {
@@ -2215,22 +2461,36 @@ class VerifierEngine {
       }
     }
 
-    // 2. Academic Catalog Search if no DOI or DOI didn't resolve
-    if (!candidate) {
-      const [crossrefResults, openalexResults] = await Promise.all([
-        crossref.search(parsed),
-        openalex.search(parsed)
-      ]);
+    // 2. Direct arXiv ID lookup if arXiv ID detected
+    if (!candidate && parsed.arxivId && arxiv) {
+      candidate = await arxiv.getById(parsed.arxivId);
+      if (!candidate && crossref) {
+        candidate = await crossref.getByDoi(`10.48550/arXiv.${parsed.arxivId}`);
+      }
+      if (candidate) {
+        matchMethod = 'arxiv_lookup';
+      }
+    }
 
-      const pool = [...crossrefResults, ...openalexResults];
+    // 3. Multi-source registry search
+    if (!candidate) {
+      const searches = [];
+      if (crossref) searches.push(crossref.search(parsed));
+      if (arxiv) searches.push(arxiv.search(parsed));
+      if (europepmc) searches.push(europepmc.search(parsed));
+      if (openalex) searches.push(openalex.search(parsed));
+
+      const searchResults = await Promise.all(searches);
+      const pool = searchResults.flat().filter(Boolean);
+
       if (pool.length > 0) {
         candidate = this._pickBestCandidate(parsed, pool);
       }
 
-      // 3. Fallback to Semantic Scholar if still nothing solid
-      if (!candidate || candidate._score < 50) {
+      // 4. Fallback to Semantic Scholar if still below confident threshold
+      if ((!candidate || candidate._score < 55) && semantic) {
         const semanticResults = await semantic.search(parsed);
-        if (semanticResults.length > 0) {
+        if (semanticResults && semanticResults.length > 0) {
           const semCandidate = this._pickBestCandidate(parsed, semanticResults);
           if (semCandidate && (!candidate || semCandidate._score > candidate._score)) {
             candidate = semCandidate;
@@ -2248,9 +2508,12 @@ class VerifierEngine {
         raw: rawCitation,
         parsed,
         verifiedData: null,
-        status: 'not_found', // 🔴 Red
+        status: 'not_found', // Unindexed in registries
         confidence: 0,
-        discrepancies: [{ field: 'record', message: 'No matching academic record found in Crossref, OpenAlex, or Semantic Scholar. May be fabricated or unpublished.' }],
+        discrepancies: [{
+          field: 'record',
+          message: 'Not indexed in Crossref, OpenAlex, or arXiv registries (Common for books, tech reports, or preprint servers. Click Scholar Search to verify).'
+        }],
         scholarUrl,
         correctedCitations: null
       };
@@ -2270,7 +2533,7 @@ class VerifierEngine {
       raw: rawCitation,
       parsed,
       verifiedData: candidate,
-      status: evaluation.status, // 'verified' 🟢 | 'discrepancy' 🟡 | 'not_found' 🔴
+      status: evaluation.status, // 'verified' 🟢 | 'discrepancy' 🟡 | 'not_found' ⚪
       confidence: evaluation.confidence,
       discrepancies: evaluation.discrepancies,
       matchMethod,
@@ -2310,10 +2573,10 @@ class VerifierEngine {
       const yearDiff = Math.abs(parsed.year - candidate.year);
       if (yearDiff === 0) {
         score += 20;
-      } else if (yearDiff <= 1) {
-        score += 12;
+      } else if (yearDiff === 1) {
+        score += 18; // Common between preprint / formal journal print editions
       } else if (yearDiff <= 3) {
-        score += 5;
+        score += 6;
       }
     } else if (candidate.year) {
       score += 10;
@@ -2321,12 +2584,13 @@ class VerifierEngine {
 
     // 3. Author Match (0 to 20 points)
     if (parsed.authors && parsed.authors.length > 0 && candidate.authors && candidate.authors.length > 0) {
-      const parsedFirst = this._cleanStr(parsed.authors[0]);
-      const matchedAuthor = candidate.authors.some(a => {
-        const family = this._cleanStr(a.family || a.name);
-        return family && (parsedFirst.includes(family) || family.includes(parsedFirst));
+      const parsedFirstWords = this._cleanStr(parsed.authors[0]).split(/\s+/).filter(w => w.length >= 2);
+      const hasAuthor = candidate.authors.some(a => {
+        const fam = this._cleanStr(a.family || '');
+        const full = this._cleanStr(a.name || `${a.family} ${a.given}`);
+        return parsedFirstWords.some(pw => (fam && (fam === pw || fam.includes(pw) || pw.includes(fam))) || full.includes(pw));
       });
-      if (matchedAuthor) {
+      if (hasAuthor) {
         score += 20;
       }
     } else if (candidate.authors && candidate.authors.length > 0) {
@@ -2345,8 +2609,8 @@ class VerifierEngine {
     const discrepancies = [];
     let score = candidate._score || this._computeScore(parsed, candidate);
 
-    if (matchMethod === 'doi_lookup') {
-      score = Math.max(score, 85);
+    if (matchMethod === 'doi_lookup' || matchMethod === 'arxiv_lookup') {
+      score = Math.max(score, 90);
     }
 
     // Check title match
@@ -2355,7 +2619,7 @@ class VerifierEngine {
       this._cleanStr(candidate.title)
     );
 
-    if (titleSim < 0.75 && parsed.title) {
+    if (titleSim < 0.65 && parsed.title && matchMethod !== 'doi_lookup') {
       discrepancies.push({
         field: 'title',
         expected: candidate.title,
@@ -2365,21 +2629,32 @@ class VerifierEngine {
     }
 
     // Check year match
-    if (parsed.year && candidate.year && parsed.year !== candidate.year) {
-      discrepancies.push({
-        field: 'year',
-        expected: candidate.year,
-        provided: parsed.year,
-        message: `Publication year error: provided ${parsed.year}, official is ${candidate.year}`
-      });
+    if (parsed.year && candidate.year) {
+      const diff = Math.abs(parsed.year - candidate.year);
+      if (diff > 1) {
+        discrepancies.push({
+          field: 'year',
+          expected: candidate.year,
+          provided: parsed.year,
+          message: `Publication year error: provided ${parsed.year}, official is ${candidate.year}`
+        });
+      } else if (diff === 1) {
+        discrepancies.push({
+          field: 'year_variance',
+          expected: candidate.year,
+          provided: parsed.year,
+          message: `Year note: provided ${parsed.year}, registry records ${candidate.year} (common preprint/print variance)`
+        });
+      }
     }
 
     // Check author match
     if (parsed.authors && parsed.authors.length > 0 && candidate.authors && candidate.authors.length > 0) {
-      const parsedFirst = this._cleanStr(parsed.authors[0]);
+      const parsedFirstWords = this._cleanStr(parsed.authors[0]).split(/\s+/).filter(w => w.length >= 2);
       const hasAuthor = candidate.authors.some(a => {
-        const family = this._cleanStr(a.family || a.name);
-        return family && (parsedFirst.includes(family) || family.includes(parsedFirst));
+        const fam = this._cleanStr(a.family || '');
+        const full = this._cleanStr(a.name || `${a.family} ${a.given}`);
+        return parsedFirstWords.some(pw => (fam && (fam === pw || fam.includes(pw) || pw.includes(fam))) || full.includes(pw));
       });
 
       if (!hasAuthor) {
@@ -2387,16 +2662,23 @@ class VerifierEngine {
           field: 'author',
           expected: candidate.authorString || 'Verified Authors',
           provided: parsed.authorString || parsed.authors.join(', '),
-          message: `First author '${parsed.authors[0]}' not found in verified authors list`
+          message: `First author '${parsed.authors[0]}' not confirmed in registry authors`
         });
       }
     }
 
+
     let status = 'verified';
-    if (score < 50) {
+    const hasMajorYearError = discrepancies.some(d => d.field === 'year');
+    const hasTitleMismatch = discrepancies.some(d => d.field === 'title');
+    const hasAuthorMismatch = discrepancies.some(d => d.field === 'author');
+
+    if (score < 55) {
       status = 'not_found';
-    } else if (discrepancies.length > 0 || score < 85) {
+    } else if (hasMajorYearError || hasTitleMismatch || hasAuthorMismatch || score < 75) {
       status = 'discrepancy';
+    } else {
+      status = 'verified';
     }
 
     return {
@@ -2415,23 +2697,31 @@ class VerifierEngine {
     if (!s1 || !s2) return 0;
     if (s1 === s2) return 1;
 
-    const words1 = new Set(s1.split(' ').filter(w => w.length > 2));
-    const words2 = new Set(s2.split(' ').filter(w => w.length > 2));
+    const words1 = s1.split(/\s+/).filter(w => w.length > 1);
+    const words2 = s2.split(/\s+/).filter(w => w.length > 1);
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
 
-    if (words1.size === 0 || words2.size === 0) return 0;
+    if (set1.size === 0 || set2.size === 0) return 0;
 
     let intersection = 0;
-    for (const w of words1) {
-      if (words2.has(w)) intersection++;
+    for (const w of set1) {
+      if (set2.has(w)) intersection++;
     }
-    const union = new Set([...words1, ...words2]).size;
-    const jaccard = union > 0 ? intersection / union : 0;
+
+    const dice = (2 * intersection) / (set1.size + set2.size);
+    const minWords = Math.min(set1.size, set2.size);
+    const maxWords = Math.max(set1.size, set2.size);
+    const lengthRatio = minWords / maxWords;
 
     if (s1.includes(s2) || s2.includes(s1)) {
-      return Math.max(jaccard, 0.88);
+      if (lengthRatio > 0.6) {
+        return Math.max(dice, 0.90);
+      }
+      return dice * 0.9;
     }
 
-    return jaccard;
+    return dice;
   }
 }
 
@@ -2444,6 +2734,7 @@ if (typeof window !== 'undefined') {
 
 
 
+
 /* --- app.js --- */
 /**
  * Scholar Reference Verifier - Standalone Web Application Controller
@@ -2451,8 +2742,10 @@ if (typeof window !== 'undefined') {
 
 const SAMPLE_REFERENCES = `[1] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., ... & Polosukhin, I. (2017). Attention is all you need. Advances in neural information processing systems, 30.
 [2] LeCun, Y., Bengio, Y., & Hinton, G. (2021). Deep learning. Nature, 521(7553), 436-444.
-[3] Zuckerberg, M., & Musk, E. (2024). Quantum Neural Network Architectures for Telepathic Communication. Journal of Synthetic Artificial Intelligence, 99(1), 1-50.
-[4] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun. Deep Residual Learning for Image Recognition. https://doi.org/10.1109/CVPR.2016.90`;
+[3] Kingma, D. P., & Ba, J. (2014). Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980.
+[4] Zuckerberg, M., & Musk, E. (2024). Quantum Neural Network Architectures for Telepathic Communication. Journal of Synthetic Artificial Intelligence, 99(1), 1-50.
+[5] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun. Deep Residual Learning for Image Recognition. https://doi.org/10.1109/CVPR.2016.90`;
+
 
 let currentResults = [];
 let activeFilter = 'all';
@@ -2813,16 +3106,21 @@ function updateStats(results) {
   if (banner) {
     banner.classList.remove('status-good', 'status-warn', 'status-danger');
 
-    if (retracted > 0 || notFound > 0) {
-      banner.classList.add(notFound > total / 2 ? 'status-danger' : 'status-warn');
-      icon.textContent = retracted > 0 ? '⚠️' : '🔍';
-      title.textContent = `Bibliography Integrity: ${authenticRatio}% Authentic`;
+    if (retracted > 0) {
+      banner.classList.add('status-danger');
+      icon.textContent = '⚠️';
+      title.textContent = `Bibliography Alert: ${retracted} Retracted Publication${retracted > 1 ? 's' : ''}`;
+      sub.textContent = 'Critical caution: One or more references have been formally retracted by the publisher.';
+    } else if (notFound > 0 || discrepancy > 0) {
+      banner.classList.add('status-warn');
+      icon.textContent = '🔍';
+      title.textContent = `Bibliography Audit: ${verified} of ${total} Confirmed in Registries (${authenticRatio}%)`;
       
       const alerts = [];
-      if (retracted > 0) alerts.push(`${retracted} retracted publication${retracted > 1 ? 's' : ''}`);
-      if (notFound > 0) alerts.push(`${notFound} unverified/fabricated citation${notFound > 1 ? 's' : ''}`);
-      if (duplicates > 0) alerts.push(`${duplicates} duplicate citation${duplicates > 1 ? 's' : ''}`);
-      sub.textContent = `Caution: ${alerts.join(', ')} detected. Please review flagged items.`;
+      if (discrepancy > 0) alerts.push(`${discrepancy} minor discrepanc${discrepancy > 1 ? 'ies' : 'y'}`);
+      if (notFound > 0) alerts.push(`${notFound} unindexed reference${notFound > 1 ? 's' : ''} (manual check advised)`);
+      if (duplicates > 0) alerts.push(`${duplicates} duplicate${duplicates > 1 ? 's' : ''}`);
+      sub.textContent = `Notes: ${alerts.join(', ')}. Use Google Scholar links below to verify unindexed works.`;
     } else {
       banner.classList.add('status-good');
       icon.textContent = '🛡️';
@@ -2865,9 +3163,10 @@ function createCardElement(item, idx) {
     badgeLabel = 'Discrepancy Fixed';
     badgeIcon = '⚠';
   } else if (item.status === 'not_found') {
-    badgeLabel = 'Unverified / Likely Fabricated';
-    badgeIcon = '✕';
+    badgeLabel = 'Unindexed / Manual Check';
+    badgeIcon = '🔍';
   }
+
 
   const correctedText = item.correctedCitations 
     ? (item.correctedCitations[currentStyle] || item.correctedCitations['apa']) 
