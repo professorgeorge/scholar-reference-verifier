@@ -1243,8 +1243,9 @@ textarea::placeholder {
               Export Format
             </button>
             <div class="dropdown-popover" id="export-popover" style="display: none;">
-              <button data-format="word-audit">📄 MS Word (.doc - Color-Coded Audit: Green / Yellow / Red)</button>
-              <button data-format="word-clean">📄 MS Word (.doc - Clean Final Print Submission)</button>
+              <button data-format="word-audit">📄 MS Word (.doc - Color-Coded Audit & Best-Bet Suggestions)</button>
+              <button data-format="word-clean-verified">📄 MS Word (.doc - Clean Final: Verified Citations Only)</button>
+              <button data-format="word-clean-all">📄 MS Word (.doc - Clean Final: All Citations Retained)</button>
               <button data-format="md">📝 Markdown Bibliography (.md)</button>
               <button data-format="bib">📦 BibTeX Bibliography (.bib)</button>
               <button data-format="txt">📝 Text Discrepancy Report (.txt)</button>
@@ -2282,7 +2283,7 @@ class CitationFormatter {
    * - Double Spacing (line-height: 2.0)
    * - Proper Section Title ("References" / "Works Cited" / "Bibliography")
    */
-  static generateWordDocument(results, style = 'apa', colorAudit = true) {
+  static generateWordDocument(results, style = 'apa', mode = 'audit') {
     const s = style.toLowerCase();
     let title = 'References';
     if (s === 'mla' || s === 'mla9') {
@@ -2294,6 +2295,13 @@ class CitationFormatter {
     }
 
     const isIeee = (s === 'ieee');
+    const colorAudit = (mode === 'audit' || mode === true);
+
+    // If clean-verified is requested, omit unindexed/hallucinated and retracted references
+    let exportResultsList = results;
+    if (mode === 'clean-verified') {
+      exportResultsList = results.filter(r => (r.status === 'verified' || r.status === 'discrepancy') && !r.verifiedData?.isRetracted);
+    }
 
     let total = results.length;
     let verifiedCount = 0;
@@ -2328,14 +2336,14 @@ class CitationFormatter {
         <strong>Manual Verification Key:</strong><br>
         • <span style="color: #15803d; font-weight: bold;">[✓ VERIFIED PURE] (Green Font):</span> Citations confirmed authentic against Crossref, arXiv, or Europe PMC registry records.<br>
         • <span style="color: #b45309; font-weight: bold;">[⚠️ REPLACEMENT: DISCREPANCY FIXED] (Amber/Yellow Font):</span> Replaced with official metadata to fix publication year, author list, or title discrepancies. Original text and audit notes are documented beneath.<br>
-        • <span style="color: #b91c1c; font-weight: bold;">[❌ QUESTIONABLE / UNINDEXED] (Red Font):</span> Citation was not found in authoritative registries. Could be a hallucinated reference, obscure book chapter, or formatting error. Direct Google Scholar lookup links are provided for manual inspection.
+        • <span style="color: #b91c1c; font-weight: bold;">[❌ QUESTIONABLE / UNINDEXED] (Red Font):</span> Citation was not confirmed in authoritative registries. Closest literature candidate (best-bet) suggestions and direct Google Scholar lookup links are provided for manual inspection.
       </td>
     </tr>
   </table>
   <br>`;
     }
 
-    const entriesHtml = results.map((r, index) => {
+    const entriesHtml = exportResultsList.map((r, index) => {
       let content = '';
       if (r.verifiedData) {
         content = this.formatHTML(r.verifiedData, style);
@@ -2386,9 +2394,13 @@ class CitationFormatter {
         badgeHtml = `<span style="font-weight: bold; font-size: 9.5pt; color: #991b1b; background-color: #fee2e2; padding: 1px 5px; mso-highlight: red;">[❌ QUESTIONABLE / UNINDEXED - MANUAL CHECK]</span> `;
         
         const scholarUrl = r.scholarUrl || `https://scholar.google.com/scholar?q=${encodeURIComponent(r.raw || '')}`;
+        const bestBetCite = r.closestMatch?.citations?.[style] || r.closestMatch?.citations?.['apa'] || r.closestMatch?.title || '';
+        const bestBetDoi = r.closestMatch?.doi ? ` • <a href="https://doi.org/${r.closestMatch.doi}">https://doi.org/${r.closestMatch.doi}</a>` : '';
+
         auditTrailHtml = `
           <div style="font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.3; margin-left: 0.5in; margin-top: 2pt; margin-bottom: 12pt; padding: 4pt 8pt; border-left: 3pt solid #ef4444; background-color: #fef2f2; color: #7f1d1d;">
-            ↳ <strong>Warning:</strong> No matching publication could be confirmed in Crossref, arXiv, or Europe PMC (Confidence: 0%). Check for hallucination or formatting errors.<br>
+            ↳ <strong>Warning:</strong> No authoritative publication confirmed in Crossref, arXiv, or Europe PMC (Confidence: ${r.confidence}%).<br>
+            ${r.closestMatch ? `↳ <strong>Closest Literature Candidate (Best Bet):</strong> <em>${escapeHtml(bestBetCite)}</em> (Match Confidence: ${r.closestMatch.confidence}%)${bestBetDoi}<br>` : ''}
             ↳ <strong>Manual Verification Link:</strong> <a href="${scholarUrl}">Click to search citation on Google Scholar ↗</a>
           </div>
         `;
@@ -2712,11 +2724,12 @@ class VerifierEngine {
         raw: rawCitation,
         parsed,
         verifiedData: null,
+        closestMatch: null,
         status: 'not_found', // Unindexed in registries
         confidence: 0,
         discrepancies: [{
           field: 'record',
-          message: 'Not indexed in Crossref, OpenAlex, or arXiv registries (Common for books, tech reports, or preprint servers. Click Scholar Search to verify).'
+          message: 'Not indexed in Crossref, arXiv, or Europe PMC registries (Common for books, tech reports, or preprint servers. Click Scholar Search to verify).'
         }],
         scholarUrl,
         correctedCitations: null
@@ -2725,7 +2738,7 @@ class VerifierEngine {
 
     const evaluation = this._evaluateMatch(parsed, candidate, matchMethod);
 
-    const correctedCitations = {
+    const candidateCitations = {
       apa: formatter.format(candidate, 'apa'),
       mla: formatter.format(candidate, 'mla'),
       chicago: formatter.format(candidate, 'chicago'),
@@ -2733,16 +2746,50 @@ class VerifierEngine {
       bibtex: formatter.format(candidate, 'bibtex')
     };
 
+    if (evaluation.status === 'not_found') {
+      const closestMatch = {
+        title: candidate.title,
+        authors: candidate.authors,
+        year: candidate.year,
+        doi: candidate.doi,
+        url: candidate.url || (candidate.doi ? `https://doi.org/${candidate.doi}` : null),
+        confidence: evaluation.confidence,
+        citations: candidateCitations
+      };
+
+      const discrepancies = [...evaluation.discrepancies];
+      if (!discrepancies.some(d => d.field === 'unverified')) {
+        discrepancies.unshift({
+          field: 'unverified',
+          message: `Unindexed / Low registry confidence (${evaluation.confidence}%). Closest candidate: "${candidate.title}"`
+        });
+      }
+
+      return {
+        raw: rawCitation,
+        parsed,
+        verifiedData: null,
+        closestMatch,
+        status: 'not_found',
+        confidence: evaluation.confidence,
+        discrepancies,
+        matchMethod,
+        scholarUrl,
+        correctedCitations: null
+      };
+    }
+
     return {
       raw: rawCitation,
       parsed,
       verifiedData: candidate,
-      status: evaluation.status, // 'verified' 🟢 | 'discrepancy' 🟡 | 'not_found' ⚪
+      closestMatch: null,
+      status: evaluation.status, // 'verified' 🟢 | 'discrepancy' 🟡
       confidence: evaluation.confidence,
       discrepancies: evaluation.discrepancies,
       matchMethod,
       scholarUrl,
-      correctedCitations
+      correctedCitations: candidateCitations
     };
   }
 
@@ -3517,6 +3564,23 @@ function createCardElement(item, idx) {
     </div>
   `;
 
+  let bestBetHtml = '';
+  if (item.status === 'not_found' && item.closestMatch) {
+    const formattedBestBet = item.closestMatch.citations?.[currentStyle] || item.closestMatch.citations?.['apa'] || item.closestMatch.title;
+    bestBetHtml = `
+      <div class="card-bestbet-box" style="margin-top: 6px; padding: 10px 12px; background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.35); border-radius: var(--radius-sm); font-size: 12.5px;">
+        <div style="font-weight: 700; color: #ef4444; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>🎯 Closest Literature Candidate (Best Bet — ${item.closestMatch.confidence}% match):</span>
+        </div>
+        <div style="color: var(--text-main); line-height: 1.4; font-style: italic;">${escapeHtml(formattedBestBet)}</div>
+        <div style="margin-top: 5px; display: flex; gap: 10px; font-size: 11px;">
+          ${item.closestMatch.doi ? `<a href="https://doi.org/${encodeURIComponent(item.closestMatch.doi)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: underline;">View Candidate DOI</a>` : ''}
+          ${item.closestMatch.url ? `<a href="${item.closestMatch.url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: underline;">Registry Record</a>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
   card.innerHTML = `
     <div class="card-header-line">
       <div style="display:flex; align-items:center; gap: 8px;">
@@ -3534,6 +3598,7 @@ function createCardElement(item, idx) {
     ${retractionBadgeHtml}
     ${discTagsHtml}
     ${correctedBoxHtml}
+    ${bestBetHtml}
     ${actionsHtml}
   `;
 
@@ -3598,11 +3663,15 @@ function exportResults(format) {
   if (format === 'word' || format === 'word-audit') {
     filename = `references_audit_${currentStyle}_${Date.now()}.doc`;
     mime = 'application/msword';
-    content = CitationFormatter.generateWordDocument(currentResults, currentStyle, true);
-  } else if (format === 'word-clean') {
-    filename = `references_clean_${currentStyle}_${Date.now()}.doc`;
+    content = CitationFormatter.generateWordDocument(currentResults, currentStyle, 'audit');
+  } else if (format === 'word-clean-verified') {
+    filename = `references_clean_verified_${currentStyle}_${Date.now()}.doc`;
     mime = 'application/msword';
-    content = CitationFormatter.generateWordDocument(currentResults, currentStyle, false);
+    content = CitationFormatter.generateWordDocument(currentResults, currentStyle, 'clean-verified');
+  } else if (format === 'word-clean-all' || format === 'word-clean') {
+    filename = `references_clean_all_${currentStyle}_${Date.now()}.doc`;
+    mime = 'application/msword';
+    content = CitationFormatter.generateWordDocument(currentResults, currentStyle, 'clean-all');
   } else if (format === 'md') {
     filename = `references_${currentStyle}_${Date.now()}.md`;
     mime = 'text/markdown';
@@ -3634,6 +3703,10 @@ function exportResults(format) {
       if (r.status === 'discrepancy' && r.discrepancies?.length) {
         lines.push(`   > ↳ *Notes:* ${r.discrepancies.map(d => d.message).join('; ')}`);
       } else if (r.status === 'not_found') {
+        if (r.closestMatch) {
+          const candidateStr = r.closestMatch.citations?.[currentStyle] || r.closestMatch.citations?.['apa'] || r.closestMatch.title;
+          lines.push(`   > ↳ *Closest Candidate (Best Bet):* ${candidateStr} (Match Confidence: ${r.closestMatch.confidence}%)`);
+        }
         lines.push(`   > ↳ *Manual Check:* [Verify on Google Scholar](${r.scholarUrl})`);
       }
       lines.push(``);
