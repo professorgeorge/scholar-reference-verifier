@@ -1243,7 +1243,8 @@ textarea::placeholder {
               Export Format
             </button>
             <div class="dropdown-popover" id="export-popover" style="display: none;">
-              <button data-format="word">📄 Microsoft Word (.doc with Hanging Indents)</button>
+              <button data-format="word-audit">📄 MS Word (.doc - Color-Coded Audit: Green / Yellow / Red)</button>
+              <button data-format="word-clean">📄 MS Word (.doc - Clean Final Print Submission)</button>
               <button data-format="md">📝 Markdown Bibliography (.md)</button>
               <button data-format="bib">📦 BibTeX Bibliography (.bib)</button>
               <button data-format="txt">📝 Text Discrepancy Report (.txt)</button>
@@ -2281,7 +2282,7 @@ class CitationFormatter {
    * - Double Spacing (line-height: 2.0)
    * - Proper Section Title ("References" / "Works Cited" / "Bibliography")
    */
-  static generateWordDocument(results, style = 'apa') {
+  static generateWordDocument(results, style = 'apa', colorAudit = true) {
     const s = style.toLowerCase();
     let title = 'References';
     if (s === 'mla' || s === 'mla9') {
@@ -2294,6 +2295,46 @@ class CitationFormatter {
 
     const isIeee = (s === 'ieee');
 
+    let total = results.length;
+    let verifiedCount = 0;
+    let discrepancyCount = 0;
+    let notFoundCount = 0;
+    let retractedCount = 0;
+
+    results.forEach(r => {
+      if (r.status === 'verified') verifiedCount++;
+      else if (r.status === 'discrepancy') discrepancyCount++;
+      else notFoundCount++;
+      if (r.verifiedData?.isRetracted) retractedCount++;
+    });
+
+    let headerAuditTable = '';
+    if (colorAudit) {
+      headerAuditTable = `
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 24pt; font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.4; border: 1.5pt solid #cbd5e1; background-color: #f8fafc;">
+    <tr>
+      <td style="padding: 10pt 14pt; border-bottom: 1pt solid #cbd5e1; font-weight: bold; font-size: 11pt; background-color: #f1f5f9; color: #0f172a;">
+        Scholar Reference Verifier — Audit Summary &amp; Verification Markers
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 10pt 14pt; color: #334155;">
+        <strong>Audit Summary:</strong> Total Citations: <strong>${total}</strong> &nbsp;|&nbsp; 
+        Pure Verified: <span style="color: #15803d; font-weight: bold;">${verifiedCount}</span> &nbsp;|&nbsp; 
+        Discrepancies Corrected: <span style="color: #b45309; font-weight: bold;">${discrepancyCount}</span> &nbsp;|&nbsp; 
+        Unindexed / Manual Check: <span style="color: #b91c1c; font-weight: bold;">${notFoundCount}</span>
+        ${retractedCount > 0 ? ` &nbsp;|&nbsp; <span style="color: #b91c1c; font-weight: bold; background-color: #fee2e2; padding: 2px 6px;">⚠️ ${retractedCount} Retracted Publication(s)</span>` : ''}
+        <br><br>
+        <strong>Manual Verification Key:</strong><br>
+        • <span style="color: #15803d; font-weight: bold;">[✓ VERIFIED PURE] (Green Font):</span> Citations confirmed authentic against Crossref, arXiv, or Europe PMC registry records.<br>
+        • <span style="color: #b45309; font-weight: bold;">[⚠️ REPLACEMENT: DISCREPANCY FIXED] (Amber/Yellow Font):</span> Replaced with official metadata to fix publication year, author list, or title discrepancies. Original text and audit notes are documented beneath.<br>
+        • <span style="color: #b91c1c; font-weight: bold;">[❌ QUESTIONABLE / UNINDEXED] (Red Font):</span> Citation was not found in authoritative registries. Could be a hallucinated reference, obscure book chapter, or formatting error. Direct Google Scholar lookup links are provided for manual inspection.
+      </td>
+    </tr>
+  </table>
+  <br>`;
+    }
+
     const entriesHtml = results.map((r, index) => {
       let content = '';
       if (r.verifiedData) {
@@ -2301,13 +2342,66 @@ class CitationFormatter {
       } else if (r.correctedCitations) {
         content = r.correctedCitations[style] || r.correctedCitations['apa'];
       } else {
-        content = r.raw;
+        content = (typeof escapeHtml === 'function') ? escapeHtml(r.raw) : (r.raw || '');
       }
 
-      if (isIeee) {
-        return `<p class="ref-entry ieee-entry"><span class="ieee-num">[${index + 1}]</span> ${content}</p>`;
+      if (!colorAudit) {
+        if (isIeee) {
+          return `<p class="ref-entry ieee-entry"><span class="ieee-num">[${index + 1}]</span> ${content}</p>`;
+        }
+        return `<p class="ref-entry">${content}</p>`;
       }
-      return `<p class="ref-entry">${content}</p>`;
+
+      // Color-Coded Audit Format
+      let fontColor = '#15803d'; // Green for pure verified
+      let badgeHtml = `<span style="font-weight: bold; font-size: 9.5pt; color: #166534; background-color: #dcfce7; padding: 1px 5px; mso-highlight: green;">[✓ VERIFIED PURE]</span> `;
+      let auditTrailHtml = '';
+
+      if (r.verifiedData?.isRetracted) {
+        fontColor = '#b91c1c';
+        badgeHtml = `<span style="font-weight: bold; font-size: 9.5pt; color: #ffffff; background-color: #b91c1c; padding: 1px 5px; mso-highlight: red;">[🚨 CRITICAL: FORMALLY RETRACTED]</span> `;
+        auditTrailHtml = `
+          <div style="font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.3; margin-left: 0.5in; margin-top: 2pt; margin-bottom: 12pt; padding: 4pt 8pt; border-left: 3pt solid #b91c1c; background-color: #fef2f2; color: #7f1d1d;">
+            ↳ <strong>Retraction Notice:</strong> This article has been formally retracted by the publisher. Avoid citing as supporting evidence without context.<br>
+            ↳ <strong>Registry Record:</strong> <a href="${r.verifiedData?.url || r.scholarUrl}">Publisher Retraction Statement ↗</a>
+          </div>
+        `;
+      } else if (r.status === 'discrepancy') {
+        fontColor = '#b45309'; // Warm amber/yellow for discrepancies
+        badgeHtml = `<span style="font-weight: bold; font-size: 9.5pt; color: #92400e; background-color: #fef3c7; padding: 1px 5px; mso-highlight: yellow;">[⚠️ REPLACEMENT: DISCREPANCY FIXED]</span> `;
+        
+        const discList = (r.discrepancies || []).map(d => d.message).join('; ');
+        const origEscaped = (typeof escapeHtml === 'function') ? escapeHtml(r.raw) : (r.raw || '');
+        const doiLink = r.verifiedData?.doi ? `<a href="https://doi.org/${r.verifiedData.doi}">https://doi.org/${r.verifiedData.doi}</a>` : '';
+
+        auditTrailHtml = `
+          <div style="font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.3; margin-left: 0.5in; margin-top: 2pt; margin-bottom: 12pt; padding: 4pt 8pt; border-left: 3pt solid #f59e0b; background-color: #fffbeb; color: #78350f;">
+            ↳ <strong>Discrepancies Corrected:</strong> ${discList || 'Publication metadata synchronized with registry'}<br>
+            ↳ <strong>Original Input:</strong> <em>"${origEscaped}"</em><br>
+            ${doiLink ? `↳ <strong>Official DOI:</strong> ${doiLink}` : ''}
+          </div>
+        `;
+      } else if (r.status === 'not_found') {
+        fontColor = '#b91c1c'; // Red for questionable / fabricated / unindexed
+        badgeHtml = `<span style="font-weight: bold; font-size: 9.5pt; color: #991b1b; background-color: #fee2e2; padding: 1px 5px; mso-highlight: red;">[❌ QUESTIONABLE / UNINDEXED - MANUAL CHECK]</span> `;
+        
+        const scholarUrl = r.scholarUrl || `https://scholar.google.com/scholar?q=${encodeURIComponent(r.raw || '')}`;
+        auditTrailHtml = `
+          <div style="font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.3; margin-left: 0.5in; margin-top: 2pt; margin-bottom: 12pt; padding: 4pt 8pt; border-left: 3pt solid #ef4444; background-color: #fef2f2; color: #7f1d1d;">
+            ↳ <strong>Warning:</strong> No matching publication could be confirmed in Crossref, arXiv, or Europe PMC (Confidence: 0%). Check for hallucination or formatting errors.<br>
+            ↳ <strong>Manual Verification Link:</strong> <a href="${scholarUrl}">Click to search citation on Google Scholar ↗</a>
+          </div>
+        `;
+      }
+
+      let entryBody = '';
+      if (isIeee) {
+        entryBody = `<p class="ref-entry ieee-entry" style="color: ${fontColor};"><span class="ieee-num">[${index + 1}]</span> ${badgeHtml}${content}</p>`;
+      } else {
+        entryBody = `<p class="ref-entry" style="color: ${fontColor};">${badgeHtml}${content}</p>`;
+      }
+
+      return entryBody + auditTrailHtml;
     }).join('\n');
 
     return `<!DOCTYPE html>
@@ -2345,12 +2439,12 @@ class CitationFormatter {
     }
     h1.doc-title {
       font-family: 'Times New Roman', Times, serif;
-      font-size: 12.0pt;
+      font-size: 14.0pt;
       font-weight: bold;
       text-align: center;
       margin-top: 0in;
-      margin-bottom: 24.0pt;
-      line-height: 2.0;
+      margin-bottom: 18.0pt;
+      line-height: 1.5;
     }
     p.ref-entry {
       font-family: 'Times New Roman', Times, serif;
@@ -2383,6 +2477,7 @@ class CitationFormatter {
 </head>
 <body>
   <h1 class="doc-title">${title}</h1>
+  ${headerAuditTable}
   ${entriesHtml}
 </body>
 </html>`;
@@ -3500,16 +3595,21 @@ function exportResults(format) {
   let filename = `verified_references_${Date.now()}`;
   let mime = 'text/plain';
 
-  if (format === 'word') {
-    filename = `references_${currentStyle}_${Date.now()}.doc`;
+  if (format === 'word' || format === 'word-audit') {
+    filename = `references_audit_${currentStyle}_${Date.now()}.doc`;
     mime = 'application/msword';
-    content = CitationFormatter.generateWordDocument(currentResults, currentStyle);
+    content = CitationFormatter.generateWordDocument(currentResults, currentStyle, true);
+  } else if (format === 'word-clean') {
+    filename = `references_clean_${currentStyle}_${Date.now()}.doc`;
+    mime = 'application/msword';
+    content = CitationFormatter.generateWordDocument(currentResults, currentStyle, false);
   } else if (format === 'md') {
     filename = `references_${currentStyle}_${Date.now()}.md`;
     mime = 'text/markdown';
     const lines = [
       `# Verified Bibliography (${currentStyle.toUpperCase()})`,
       `*Generated by Scholar Reference Verifier on ${new Date().toLocaleDateString()}*\n`,
+      `> **Audit Key**: 🟢 **Pure Verified** | 🟡 **Fixed Discrepancy** | 🔴 **Unindexed / Manual Check** | 🚨 **Retracted**\n`,
       `---`,
       ``
     ];
@@ -3518,11 +3618,24 @@ function exportResults(format) {
       const inText = r.correctedCitations?.inText ? `*(In-text: \`${r.correctedCitations.inText}\`)*` : '';
       const doi = r.verifiedData?.doi ? `[https://doi.org/${r.verifiedData.doi}](https://doi.org/${r.verifiedData.doi})` : '';
       const oa = r.verifiedData?.oaUrl ? `[Free PDF](${r.verifiedData.oaUrl})` : '';
-      const statusBadge = r.status === 'verified' ? '🟢 Verified' : (r.status === 'discrepancy' ? '🟡 Corrected' : '🔍 Unindexed');
+      
+      let statusBadge = '🟢 Verified Pure';
+      if (r.verifiedData?.isRetracted) {
+        statusBadge = '🚨 Retracted Publication';
+      } else if (r.status === 'discrepancy') {
+        statusBadge = '🟡 Fixed Discrepancy';
+      } else if (r.status === 'not_found') {
+        statusBadge = '🔴 Unindexed / Check';
+      }
       
       lines.push(`${i + 1}. ${cite}`);
       const meta = [statusBadge, inText, doi, oa].filter(Boolean).join(' • ');
       if (meta) lines.push(`   > ${meta}`);
+      if (r.status === 'discrepancy' && r.discrepancies?.length) {
+        lines.push(`   > ↳ *Notes:* ${r.discrepancies.map(d => d.message).join('; ')}`);
+      } else if (r.status === 'not_found') {
+        lines.push(`   > ↳ *Manual Check:* [Verify on Google Scholar](${r.scholarUrl})`);
+      }
       lines.push(``);
     });
     content = lines.join('\n');
