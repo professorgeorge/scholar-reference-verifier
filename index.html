@@ -4,10 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Scholar Reference Verifier - Verify Citations & Detect Discrepancies</title>
-  <meta name="description" content="Free academic citation verifier. Detects publication errors, hallucinated references, and retractions using Crossref and OpenAlex. Formats bibliographies in APA, MLA, Chicago, IEEE, BibTeX and Word.">
+  <meta name="description" content="Free academic citation verifier. Detects publication errors, hallucinated references, and retractions using Crossref, arXiv, Europe PMC, and OpenAlex. Formats bibliographies in APA, MLA, Chicago, IEEE, BibTeX and Word.">
+  <meta name="theme-color" content="#090d16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Scholar Verifier">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%233b82f6'/%3E%3Cpath d='M24 76 A10 10 0 0 1 34 66 H80 V22 H34 A10 10 0 0 0 24 32 Z' fill='none' stroke='white' stroke-width='6'/%3E%3Cpath d='M42 46 L52 56 L72 34' fill='none' stroke='%2310b981' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
   <style>
 /* Scholar Reference Verifier - Standalone Web Application Stylesheet */
 :root {
@@ -622,6 +629,67 @@ textarea::placeholder {
   color: #ffffff;
 }
 
+/* Results Live Search Filter */
+.results-search-wrap {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.results-search-wrap .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.results-search-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-size: 13px;
+  padding: 8px 32px 8px 34px;
+  transition: all 0.15s ease;
+}
+
+.results-search-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.clear-search-btn:hover {
+  color: var(--text-main);
+}
+
+.btn-copied-state {
+  background: var(--success) !important;
+  color: #ffffff !important;
+  border-color: var(--success) !important;
+  transform: scale(1.02);
+}
+
 /* Cards Container */
 .cards-container {
   display: flex;
@@ -1062,7 +1130,7 @@ textarea::placeholder {
               Upload .txt / .bib
             </button>
           </div>
-          <span class="keyboard-tip">Tip: Numbered lists like <code>[1]</code> or <code>1.</code> are automatically parsed</span>
+          <span class="keyboard-tip">Press <strong>Ctrl + Enter</strong> to verify • Supports numbered <code>[1]</code>, <code>1.</code> or free text</span>
         </div>
       </div>
 
@@ -1140,13 +1208,19 @@ textarea::placeholder {
             <button class="tab-btn" data-filter="not_found">Unindexed / Check (<span id="count-not-found">0</span>)</button>
           </div>
 
-
           <div class="toolbar-actions">
             <button id="sort-az-btn" class="btn-secondary-sm" title="Sort references alphabetically by author surname">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
               Sort A–Z
             </button>
           </div>
+        </div>
+
+        <!-- Live Search Filter -->
+        <div class="results-search-wrap">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="results-search-input" class="results-search-input" placeholder="Filter verified references by title, author, year, or DOI..." autocomplete="off">
+          <button id="clear-search-btn" class="clear-search-btn" title="Clear search">&times;</button>
         </div>
 
         <!-- Reference Cards List Container -->
@@ -1170,6 +1244,7 @@ textarea::placeholder {
             </button>
             <div class="dropdown-popover" id="export-popover" style="display: none;">
               <button data-format="word">📄 Microsoft Word (.doc with Hanging Indents)</button>
+              <button data-format="md">📝 Markdown Bibliography (.md)</button>
               <button data-format="bib">📦 BibTeX Bibliography (.bib)</button>
               <button data-format="txt">📝 Text Discrepancy Report (.txt)</button>
               <button data-format="csv">📊 Spreadsheet Table (.csv)</button>
@@ -2371,35 +2446,69 @@ const _CitationFormatter = (typeof CitationFormatter !== 'undefined') ? Citation
 
 
 class VerifierEngine {
+  // Session cache to make re-verification and repeat queries instantaneous
+  static _cache = new Map();
+
   static async verifyBatch(rawCitationList, onProgress = null) {
-    const results = [];
     const total = rawCitationList.length;
+    if (total === 0) return [];
 
-    for (let i = 0; i < total; i++) {
-      const raw = rawCitationList[i];
-      if (onProgress) {
-        onProgress({ current: i + 1, total, currentText: raw });
-      }
+    const results = new Array(total);
+    let completedCount = 0;
 
-      try {
-        const result = await this.verifySingle(raw);
-        results.push(result);
-      } catch (err) {
-        console.error('[VerifierEngine] Error verifying item:', err);
-        results.push({
-          raw,
-          status: 'not_found',
-          errorMessage: err.message || 'Verification error',
-          confidence: 0,
-          discrepancies: [{ field: 'error', message: 'Verification error: ' + (err.message || 'Registry unavailable') }],
-          scholarUrl: `https://scholar.google.com/scholar?q=${encodeURIComponent(raw)}`
-        });
-      }
+    // Worker pool with concurrency 3: polite to Crossref/arXiv/EuropePMC while 3-4x faster
+    const CONCURRENCY = 3;
+    let nextIndex = 0;
 
-      if (i < total - 1) {
-        await new Promise(r => setTimeout(r, 100));
+    const worker = async () => {
+      while (nextIndex < total) {
+        const i = nextIndex++;
+        const raw = rawCitationList[i];
+        const cacheKey = (raw || '').trim();
+
+        if (onProgress) {
+          onProgress({ current: completedCount + 1, total, currentText: raw });
+        }
+
+        try {
+          if (cacheKey && this._cache.has(cacheKey)) {
+            // Clone cached result so any duplicate annotations don't pollute cache
+            results[i] = JSON.parse(JSON.stringify(this._cache.get(cacheKey)));
+          } else {
+            const result = await this.verifySingle(raw);
+            if (cacheKey && result && result.status !== 'not_found') {
+              this._cache.set(cacheKey, result);
+            }
+            results[i] = result;
+          }
+        } catch (err) {
+          console.error('[VerifierEngine] Error verifying item:', err);
+          results[i] = {
+            raw,
+            status: 'not_found',
+            errorMessage: err.message || 'Verification error',
+            confidence: 0,
+            discrepancies: [{ field: 'error', message: 'Verification error: ' + (err.message || 'Registry unavailable') }],
+            scholarUrl: `https://scholar.google.com/scholar?q=${encodeURIComponent(raw)}`
+          };
+        }
+
+        completedCount++;
+        if (onProgress) {
+          onProgress({ current: completedCount, total, currentText: raw });
+        }
+
+        // Polite stagger between requests in each worker
+        await new Promise(r => setTimeout(r, 60));
       }
+    };
+
+    const workers = [];
+    const poolSize = Math.min(CONCURRENCY, total);
+    for (let w = 0; w < poolSize; w++) {
+      workers.push(worker());
     }
+    await Promise.all(workers);
 
     this._detectDuplicates(results);
     return results;
@@ -2750,12 +2859,21 @@ const SAMPLE_REFERENCES = `[1] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, 
 let currentResults = [];
 let activeFilter = 'all';
 let currentStyle = 'apa';
+let currentSearchQuery = '';
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   setupEventListeners();
   setupDragAndDrop();
   restoreState();
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.debug('ServiceWorker registration skipped:', err);
+      });
+    });
+  }
 });
 
 function initTheme() {
@@ -2863,7 +2981,7 @@ function setupEventListeners() {
     }
   });
 
-  // Textarea input auto-save
+  // Textarea input auto-save & Ctrl+Enter shortcut
   const inputEl = document.getElementById('reference-input');
   let saveTimer = null;
   inputEl?.addEventListener('input', () => {
@@ -2872,6 +2990,13 @@ function setupEventListeners() {
     saveTimer = setTimeout(() => {
       saveState();
     }, 300);
+  });
+
+  inputEl?.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      startVerification();
+    }
   });
 
   // Load sample button
@@ -2940,6 +3065,28 @@ function setupEventListeners() {
     });
   });
 
+  // Results live search input
+  const searchInput = document.getElementById('results-search-input');
+  const clearSearchBtn = document.getElementById('clear-search-btn');
+
+  searchInput?.addEventListener('input', (e) => {
+    currentSearchQuery = e.target.value.trim().toLowerCase();
+    if (clearSearchBtn) {
+      clearSearchBtn.style.display = currentSearchQuery ? 'inline-flex' : 'none';
+    }
+    renderCards(currentResults);
+  });
+
+  clearSearchBtn?.addEventListener('click', () => {
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.focus();
+    }
+    currentSearchQuery = '';
+    if (clearSearchBtn) clearSearchBtn.style.display = 'none';
+    renderCards(currentResults);
+  });
+
   // Copy All button
   document.getElementById('copy-all-btn')?.addEventListener('click', () => {
     copyAllCorrected();
@@ -2980,6 +3127,12 @@ function updateRefCountHint(text) {
 function resetAllWorkspace() {
   currentResults = [];
   activeFilter = 'all';
+  currentSearchQuery = '';
+
+  const searchInput = document.getElementById('results-search-input');
+  const clearSearchBtn = document.getElementById('clear-search-btn');
+  if (searchInput) searchInput.value = '';
+  if (clearSearchBtn) clearSearchBtn.style.display = 'none';
 
   const inputEl = document.getElementById('reference-input');
   if (inputEl) {
@@ -3138,12 +3291,32 @@ function renderCards(results) {
   container.innerHTML = '';
 
   const filtered = results.filter(r => {
-    if (activeFilter === 'all') return true;
-    return r.status === activeFilter;
+    // 1. Tab filter
+    if (activeFilter !== 'all' && r.status !== activeFilter) return false;
+
+    // 2. Search query filter
+    if (currentSearchQuery) {
+      const q = currentSearchQuery;
+      const title = (r.verifiedData?.title || r.parsed?.title || '').toLowerCase();
+      const raw = (r.raw || '').toLowerCase();
+      const doi = (r.verifiedData?.doi || '').toLowerCase();
+      const year = String(r.verifiedData?.year || r.parsed?.year || '');
+      const authors = (r.verifiedData?.authors || []).map(a => `${a.family || ''} ${a.given || ''}`).join(' ').toLowerCase() 
+        + ' ' + (r.parsed?.authors || []).join(' ').toLowerCase();
+
+      if (!title.includes(q) && !raw.includes(q) && !doi.includes(q) && !year.includes(q) && !authors.includes(q)) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted); font-size: 13px;">No citations match the selected tab filter.</div>`;
+    const msg = currentSearchQuery 
+      ? `No references match "${escapeHtml(currentSearchQuery)}". Try clearing your search.`
+      : 'No citations match the selected tab filter.';
+    container.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted); font-size: 13px;">${msg}</div>`;
     return;
   }
 
@@ -3270,18 +3443,34 @@ function createCardElement(item, idx) {
   `;
 
   card.querySelector('.copy-card-btn')?.addEventListener('click', (e) => {
-    const textToCopy = decodeURIComponent(e.currentTarget.dataset.text);
+    const btn = e.currentTarget;
+    const textToCopy = decodeURIComponent(btn.dataset.text);
     copyToClipboard(textToCopy);
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!`;
+    btn.classList.add('btn-copied-state');
+    setTimeout(() => {
+      btn.innerHTML = origHtml;
+      btn.classList.remove('btn-copied-state');
+    }, 1500);
   });
 
   card.querySelector('.copy-doi-btn')?.addEventListener('click', (e) => {
-    const doi = decodeURIComponent(e.currentTarget.dataset.doi);
+    const btn = e.currentTarget;
+    const doi = decodeURIComponent(btn.dataset.doi);
     copyToClipboard(`https://doi.org/${doi}`);
+    const origText = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = origText; }, 1500);
   });
 
   card.querySelector('.copy-intext-btn')?.addEventListener('click', (e) => {
-    const inText = e.currentTarget.dataset.intext;
+    const btn = e.currentTarget;
+    const inText = btn.dataset.intext;
     copyToClipboard(inText);
+    const origText = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = origText; }, 1500);
   });
 
   return card;
@@ -3297,6 +3486,13 @@ function copyAllCorrected() {
 
   if (correctedList.length === 0) return;
   copyToClipboard(correctedList.join('\n\n'));
+
+  const copyAllBtn = document.getElementById('copy-all-btn');
+  if (copyAllBtn) {
+    const origHtml = copyAllBtn.innerHTML;
+    copyAllBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied All!`;
+    setTimeout(() => { copyAllBtn.innerHTML = origHtml; }, 1500);
+  }
 }
 
 function exportResults(format) {
@@ -3308,6 +3504,28 @@ function exportResults(format) {
     filename = `references_${currentStyle}_${Date.now()}.doc`;
     mime = 'application/msword';
     content = CitationFormatter.generateWordDocument(currentResults, currentStyle);
+  } else if (format === 'md') {
+    filename = `references_${currentStyle}_${Date.now()}.md`;
+    mime = 'text/markdown';
+    const lines = [
+      `# Verified Bibliography (${currentStyle.toUpperCase()})`,
+      `*Generated by Scholar Reference Verifier on ${new Date().toLocaleDateString()}*\n`,
+      `---`,
+      ``
+    ];
+    currentResults.forEach((r, i) => {
+      const cite = r.correctedCitations ? (r.correctedCitations[currentStyle] || r.correctedCitations['apa']) : r.raw;
+      const inText = r.correctedCitations?.inText ? `*(In-text: \`${r.correctedCitations.inText}\`)*` : '';
+      const doi = r.verifiedData?.doi ? `[https://doi.org/${r.verifiedData.doi}](https://doi.org/${r.verifiedData.doi})` : '';
+      const oa = r.verifiedData?.oaUrl ? `[Free PDF](${r.verifiedData.oaUrl})` : '';
+      const statusBadge = r.status === 'verified' ? '🟢 Verified' : (r.status === 'discrepancy' ? '🟡 Corrected' : '🔍 Unindexed');
+      
+      lines.push(`${i + 1}. ${cite}`);
+      const meta = [statusBadge, inText, doi, oa].filter(Boolean).join(' • ');
+      if (meta) lines.push(`   > ${meta}`);
+      lines.push(``);
+    });
+    content = lines.join('\n');
   } else if (format === 'bib') {
     filename += '.bib';
     content = currentResults
